@@ -1,0 +1,12 @@
+#!/usr/bin/env -S guile
+# -*- scheme -*- !#
+
+;;; Add script root to load path
+(add-to-load-path
+ (canonicalize-path
+  (string-append (dirname (car (command-line))) "/source")))
+
+(import (prefix (huntest) hut::))
+
+(debug-disable 'backtrace)
+(hut::main (command-line))

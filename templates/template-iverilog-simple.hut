@@ -1,0 +1,16 @@
+#!/usr/bin/env -S guile
+# -*- scheme -*- !#
+
+;; (add-to-load-path "/<huntest>/source")
+(import (prefix (huntest) hut::)
+        (prefix (huntest iverilog) iverilog::))
+
+(hut::run
+ (iverilog::simple-testbench
+  #:name "testbench name"               ; optional
+  #:compile-flags '("-g2012")           ; optional
+  #:runtime-flags '("-fst")             ; optional
+  #:include-paths '()                   ; optional
+  #:defines '()                         ; optional
+  #:sources '("template-iverilog-simple-tb.sv")
+  #:top "testbench"))

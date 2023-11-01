@@ -1,0 +1,33 @@
+#!/usr/bin/env -S guile
+# -*- scheme -*- !#
+
+;; (add-to-load-path "/<huntest>/source")
+(import (prefix (huntest) hut::))
+
+(define testbench
+  (hut::make-testbench
+   #:name "testbench name"
+
+   ;; Initialization (optional)
+   #:init
+   (lambda (plusargs base-path testbench-path)
+     ;; Initialization code
+     #t)
+
+   ;; Test or list of tests
+   #:tests
+   (hut::make-test
+     #:name "test name"
+     #:body
+     (lambda (plusargs base-path testbench-path test-path)
+       ;; Test code
+       #t))
+
+   ;; Finalization (optional)
+   #:finish
+   (lambda (plusargs base-path testbench-path)
+     ;; Finalization code
+     #t)
+   ))
+
+(hut::run testbench)

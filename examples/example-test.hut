@@ -1,0 +1,61 @@
+#!/usr/bin/env -S guile
+# -*- scheme -*- !#
+
+(add-to-load-path "../source")
+(import (prefix (huntest) hut::))
+(import (srfi srfi-28))
+
+(hut::run
+ (map
+  (lambda (n)
+    (hut::make-testbench
+     #:name (format "testbench ~a" n)
+
+     ;; Initialisation (testbench constructor)
+     #:init
+     (lambda (plusargs base-path tb-path)
+       ;; Initialization code
+       (hut::printf "initialization\n")
+       (hut::printf 'info "info initialization\n")
+       (hut::printf 'warn "warn initialization\n")
+       (hut::printf 'warn "Plusargs: ~a\n" plusargs)
+       (when (= n 27)
+         (hut::printf 'fail "Init fail!"))
+       #t)
+
+     ;; Test or list of tests
+     #:tests
+     (map
+      (lambda (m)
+        (hut::make-test
+         #:name (format "test ~a" m)
+         #:body
+         (lambda (plusargs base-path tb-path test-path)
+           ;; Test code
+           (hut::printf "test ~a\n" m)
+           (hut::printf 'info "PWD: ~a\n" (getcwd))
+           (hut::system% (format "echo \"Hello testbench, test ~a!\" > ~a/hello.txt" m test-path))
+           (hut::system% (format "cat ~a/hello.txt" test-path))
+           (hut::printf 'warn "Plusargs: ~a\n" plusargs)
+           (when (or (and (= n 1) (= m 17))
+                     (and (= n 3) (= m 31))
+                     (and (= n 10) (= m 53))
+                     (and (= n 33) (= m 17))
+                     (and (= n 57) (= m 24)))
+             (hut::printf 'fail "ЪУЪ!"))
+
+           (when (and (= n 44) (= m 13))
+             (raise-exception "Exception in test"))
+           #t)))
+      (iota 100))
+
+     ;; Finalization (testbench destructor)
+     #:finish
+     (lambda (plusargs base-path tb-path)
+       ;; Finalization code
+       (hut::printf "finalization\n")
+       (hut::printf 'warn "Plusargs: ~a\n" plusargs)
+       (when (= n 35)
+         (hut::printf 'fail "Fini fail!"))
+       #t)))
+  (iota 50)))
