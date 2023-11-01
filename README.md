@@ -1,4 +1,4 @@
-Huntest - HDL Unit Test executor
+Huntest - HDL Testbench Launcher
 ================================
 
 Work in progress.
