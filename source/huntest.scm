@@ -17,7 +17,7 @@
  list-add-separator
  list-dir
  list-flatten
- printf
+ println
  sort-uniq
  string->filename
  string-append*
@@ -255,7 +255,7 @@
 ;;;
 (define* (system%-capture cmd #:key (base #f))
   ;; Echo command
-  (printf "RUN: ~a\n" cmd)
+  (println "RUN: ~a" cmd)
   ;; Execute
   (let* ((cmd (string-append
                (if base (format "cd ~a; " base) "")
@@ -383,19 +383,21 @@
 ;;;
 ;;; Useful print function
 ;;;
-(define (printf tag . rest)
+(define (println tag . rest)
   (if (symbol? tag)
       (let ((output-tag (assq tag output-tags)))
         (if output-tag
-            (begin
-              (display (cdr output-tag))
-              (display (apply format rest)))
+            (for-each display
+                      (map (cut format "~a~a\n" (cdr output-tag) <>)
+                           (string-split (apply format rest) #\newline)))
             (raise-exception (format "Tag '~a' not found" tag))))
-      (display (apply format (cons tag rest)))))
+      (begin
+        (display (apply format (cons tag rest)))
+        (newline))))
 
-(define (eprintf tag . rest)
+(define (eprintln tag . rest)
   (with-output-to-port (current-error-port)
-    (lambda () (apply printf (cons tag rest)))))
+    (lambda () (apply println (cons tag rest)))))
 
 ;;;
 ;;; Make correct file name from arbitrary string
@@ -447,7 +449,10 @@
 ;;; Testbench struct
 ;;;
 (define-record-type <testbench>
-  (testbench-new name init finish tests init-pass init-output fini-pass fini-output base-path work-path filename)
+  (testbench-new name init finish tests
+                 init-pass init-output
+                 fini-pass fini-output
+                 base-path work-path filename)
   testbench?
   (name tb-name)
   (init tb-init)
@@ -550,7 +555,7 @@
                        (with-exception-handler
                            (lambda (e)
                              (newline)
-                             (printf 'fail "~a\n" e))
+                             (println 'fail "~a" e))
                          (lambda () (set! pass (func)))
                          #:unwind? #t))))
                   #\newline))
@@ -798,11 +803,12 @@
       (let loop ((inits
                   ;; Execute all inits
                   (map
-                   (lambda (tb) (cons
-                                 tb
-                                 (begin
-                                   (tb-set-work-path! tb (prepare-tb-path tb))
-                                   (future% (tb-init-execute! tb plusargs)))))
+                   (lambda (tb)
+                     (cons
+                      tb
+                      (begin
+                        (tb-set-work-path! tb (prepare-tb-path tb))
+                        (future% (tb-init-execute! tb plusargs)))))
                    testbenches))
                  (tests '())
                  (finis '()))
@@ -923,7 +929,7 @@
        (for-each
         (lambda (folder)
           (let ((folder (append-path base folder)))
-            (printf "Delete '~a'\n" folder)
+            (println "Delete '~a'" folder)
             (delete-recursive folder)))
         (filter (cut string-prefix? prefix <>) folders))))
    tb-list))
@@ -1014,7 +1020,7 @@
 ;;; Print log level verilog defines
 ;;;
 (define (print-verilog-defines)
-  (define (* . fmt) (apply printf fmt) (newline))
+  (define (* . fmt) (apply println fmt))
   (let ((tags
          (map (lambda (tag)
                 (cons
@@ -1060,7 +1066,7 @@
 ;;; Print help
 ;;;
 (define (print-help app-name)
-  (define (* . fmt) (apply printf fmt) (newline))
+  (define (* . fmt) (apply println fmt))
   (* "Usage: ~a [OPTION]... [PLUSARGS]" app-name)
   (* "Run testbenches")
   (* "")
@@ -1130,7 +1136,7 @@
       (cond
        ;; Unknown options
        (err
-        (eprintf "ERROR: Unknown option '~a'\n\n" err)
+        (eprintln "ERROR: Unknown option '~a'\n" err)
         (print-help (car cmdl))
         (exit -1))
        ;; Help
@@ -1139,7 +1145,7 @@
         (exit 0))
        ;; Print version
        ((opt-get opts 'version)
-        (printf "~a, Version ~a\n" (car cmdl) APP_VERSION)
+        (println "~a, Version ~a" (car cmdl) APP_VERSION)
         (exit 0))
        ;; Print defines
        ((opt-get opts 'defines)
@@ -1215,8 +1221,8 @@
    (lambda (file tbs)
      (with-exception-handler
          (lambda (e)
-           (eprintf "ERROR: load testbench script ~a\n" file)
-           (eprintf "~a\n\n" e)
+           (eprintln "ERROR: load testbench script ~a" file)
+           (eprintln "~a\n" e)
            tbs)
        (lambda ()
          (let ((t (list-flatten (load file))))
@@ -1227,7 +1233,7 @@
                  (testbenches-link-to-file! t file)
                  (append tbs t))
                (begin
-                 (eprintf "ERROR: no testbench loaded from ~a\n" file)
+                 (eprintln "ERROR: no testbench loaded from ~a" file)
                  tbs))))
        #:unwind? #t))
    '() files))
@@ -1254,7 +1260,7 @@
                        (lambda (f files)
                          (with-exception-handler
                              (lambda (e)
-                               (eprintf "ERROR: can't stat file ~a\n" f)
+                               (eprintln "ERROR: can't stat file ~a" f)
                                files)
                            (lambda ()
                              (let ((t (stat:type (stat f))))
