@@ -1179,25 +1179,25 @@
            ;; dry run
            ((opt 'list)
             (for-each
-             (cut tb-print-only <> (opt 'colorize))
+             (cut tb-print-only <> (opt 'color))
              testbenches))
 
            ;; clean outputs
            ((opt 'clean)
-            (force-delete-outputs testbenches (opt 'work-base)))
+            (force-delete-outputs testbenches (opt 'work)))
 
            ;; run testbenches
            (else
             (run-testbenches! testbenches
-                              #:base-path      (opt 'work-base)
+                              #:base-path      (opt 'work)
                               #:plusargs       (opt 'plusargs)
                               #:verbosity      (cond
                                                 ((opt 'verbose) 'verbose)
                                                 ((opt 'quiet) 'quiet)
                                                 (else #f))
-                              #:keep-output?   (or (opt 'keep-output) (opt 'static-output))
-                              #:colorize?      (opt 'colorize)
-                              #:static-output? (opt 'static-output)
+                              #:keep-output?   (or (opt 'keep) (opt 'static))
+                              #:colorize?      (opt 'color)
+                              #:static-output? (opt 'static)
                               #:parallel?      (opt 'parallel))
             (when (not (testbenches-pass? testbenches))
               (exit -1))))
@@ -1277,25 +1277,25 @@
          ;; dry run
          ((opt 'list)
           (for-each
-           (cut tb-print-only <> (opt 'colorize))
+           (cut tb-print-only <> (opt 'color))
            testbenches))
 
          ;; clean outputs
          ((opt 'clean)
-          (force-delete-outputs testbenches (opt 'work-base)))
+          (force-delete-outputs testbenches (opt 'work)))
 
          ;; run testbenches
          (else
           (run-testbenches! testbenches
-                            #:base-path      (opt 'work-base)
+                            #:base-path      (opt 'work)
                             #:plusargs       (opt 'plusargs)
                             #:verbosity      (cond
                                               ((opt 'verbose) 'verbose)
                                               ((opt 'quiet) 'quiet)
                                               (else #f))
-                            #:keep-output?   (or (opt 'keep-output) (opt 'static-output))
-                            #:colorize?      (opt 'colorize)
-                            #:static-output? (opt 'static-output)
+                            #:keep-output?   (or (opt 'keep) (opt 'static))
+                            #:colorize?      (opt 'color)
+                            #:static-output? (opt 'static)
                             #:parallel?      (opt 'parallel))
           (when (not (testbenches-pass? testbenches))
             (exit -1))))
