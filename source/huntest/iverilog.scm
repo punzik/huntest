@@ -54,6 +54,7 @@
                           #:base tb-path))))
 
      #:tests (make-test
+              #:name top
               #:body
               (lambda (plusargs base-path tb-path test-path)
                 (let-values (((ext-flags reg-flags)
