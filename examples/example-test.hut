@@ -15,12 +15,12 @@
      #:init
      (lambda (plusargs base-path tb-path)
        ;; Initialization code
-       (hut::printf "initialization\n")
-       (hut::printf 'info "info initialization\n")
-       (hut::printf 'warn "warn initialization\n")
-       (hut::printf 'warn "Plusargs: ~a\n" plusargs)
+       (hut::println "initialization")
+       (hut::println 'info "info initialization")
+       (hut::println 'warn "warn initialization")
+       (hut::println 'warn "Plusargs: ~a" plusargs)
        (when (= n 27)
-         (hut::printf 'fail "Init fail!"))
+         (hut::println 'fail "Init fail!"))
        #t)
 
      ;; Test or list of tests
@@ -32,17 +32,17 @@
          #:body
          (lambda (plusargs base-path tb-path test-path)
            ;; Test code
-           (hut::printf "test ~a\n" m)
-           (hut::printf 'info "PWD: ~a\n" (getcwd))
+           (hut::println "test ~a" m)
+           (hut::println 'info "PWD: ~a" (getcwd))
            (hut::system% (format "echo \"Hello testbench, test ~a!\" > ~a/hello.txt" m test-path))
            (hut::system% (format "cat ~a/hello.txt" test-path))
-           (hut::printf 'warn "Plusargs: ~a\n" plusargs)
+           (hut::println 'warn "Plusargs: ~a" plusargs)
            (when (or (and (= n 1) (= m 17))
                      (and (= n 3) (= m 31))
                      (and (= n 10) (= m 53))
                      (and (= n 33) (= m 17))
                      (and (= n 57) (= m 24)))
-             (hut::printf 'fail "ЪУЪ!"))
+             (hut::println 'fail "ЪУЪ!"))
 
            (when (and (= n 44) (= m 13))
              (raise-exception "Exception in test"))
@@ -53,9 +53,9 @@
      #:finish
      (lambda (plusargs base-path tb-path)
        ;; Finalization code
-       (hut::printf "finalization\n")
-       (hut::printf 'warn "Plusargs: ~a\n" plusargs)
+       (hut::println "finalization")
+       (hut::println 'warn "Plusargs: ~a" plusargs)
        (when (= n 35)
-         (hut::printf 'fail "Fini fail!"))
+         (hut::println 'fail "Fini fail!"))
        #t)))
   (iota 50)))
