@@ -954,23 +954,23 @@
 ;;; Parse command line options with SRFI-37
 ;;;
 (define (opt-get opts name)
-  (let ((opt (assoc name opts)))
+  (let ((opt (assq name opts)))
     (if opt
         (cdr opt)
         #f)))
 
 (define (parse-opts args . opt-spec)
   (define (opt-set opts name value)
-    (if (assoc name opts)
+    (if (assq name opts)
         (map (lambda (opt)
-               (if (equal? (car opt) name)
+               (if (eq? (car opt) name)
                    (cons name value)
                    opt))
              opts)
         (alist-cons name value opts)))
 
   (define (opt-add opts name value)
-    (if (assoc name opts)
+    (if (assq name opts)
         (opt-set opts name
                  (cons value
                        (opt-get opts name)))
@@ -981,13 +981,16 @@
    args
    ;; options
    (map (lambda (spec)
-          (let* ((names (list-ref spec 0))
-                 (type (list-ref spec 1))
-                 (name (car names))
+          (let* ((names (first spec))
+                 (type (second spec))
+                 (name (first names))
+                 (char (second names))
                  (req? (eq? type 'required))
                  (opt? (eq? type 'optional))
                  (many? (eq? type 'multiple)))
-            (option names (or many? req?) opt?
+            (option (list (symbol->string name) char)
+                    (or many? req?)
+                    opt?
                     (if many?
                         (lambda (opt nm arg opts rest error)
                           (values (if arg
@@ -1074,7 +1077,7 @@
   (when (not (%run-standalone%))
     (* "  -r, --recursive      Recursive search for script files.")
     (* "  -x, --regex <REGEX>  Regular expression for searching script files. Default: '~a'" TEST_SCRIPT_REGEX))
-  (* "  -n, --only-show      Show testbenches only.")
+  (* "  -l, --list           List testbenches.")
   (* "  -v, --verbose        Verbose output.")
   (* "  -q, --quiet          Quiet output.")
   (* "  -V, --version        Print version.")
@@ -1107,21 +1110,21 @@
          (append
           (if (%run-standalone%)
               '()
-              '((("recursive" #\r) none)
-                (("regex" #\x) required)))
-          '((("query" #\Q) required)
-            (("verbose" #\v) none)
-            (("quiet" #\q) none)
-            (("keep" #\k) none)
-            (("color" #\c) none)
-            (("static" #\s) none)
-            (("work" #\w) required)
-            (("nopar" #\i) none)
-            (("clean" #\C) none)
-            (("only-show" #\n) none)
-            (("defines" #\f) none)
-            (("version" #\V) none)
-            (("help" #\h) none)))))
+              '(((recursive #\r) none)
+                ((regex #\x) required)))
+          '(((query #\Q) required)
+            ((verbose #\v) none)
+            ((quiet #\q) none)
+            ((keep #\k) none)
+            ((color #\c) none)
+            ((static #\s) none)
+            ((work #\w) required)
+            ((nopar #\i) none)
+            ((clean #\C) none)
+            ((list #\l) none)
+            ((defines #\f) none)
+            ((version #\V) none)
+            ((help #\h) none)))))
     (let-values (((opts rest err)
                   (apply parse-opts (cons (cdr cmdl) opt-list))))
       (cond
@@ -1131,39 +1134,30 @@
         (print-help (car cmdl))
         (exit -1))
        ;; Help
-       ((opt-get opts "help")
+       ((opt-get opts 'help)
         (print-help (car cmdl))
         (exit 0))
        ;; Print version
-       ((opt-get opts "version")
+       ((opt-get opts 'version)
         (printf "~a, Version ~a\n" (car cmdl) APP_VERSION)
         (exit 0))
        ;; Print defines
-       ((opt-get opts "defines")
+       ((opt-get opts 'defines)
         (print-verilog-defines)
         (exit 0))
        ;; OK
        (else
-        (let ((opts-alist
-               `((query         . ,(opt-get opts "query"))
-                 (verbose       . ,(opt-get opts "verbose"))
-                 (quiet         . ,(opt-get opts "quiet"))
-                 (keep-output   . ,(opt-get opts "keep"))
-                 (colorize      . ,(opt-get opts "color"))
-                 (parallel      . ,(not (opt-get opts "nopar")))
-                 (static-output . ,(opt-get opts "static"))
-                 (work-base     . ,(opt-get opts "work"))
-                 (clean         . ,(opt-get opts "clean"))
-                 (recursive     . ,(opt-get opts "recursive"))
-                 (regex         . ,(opt-get opts "regex"))
-                 (only-show     . ,(opt-get opts "only-show"))
-                 (plusargs      . ,(filter (cut string-prefix? "+" <>) rest))
-                 (rest          . ,(remove (cut string-prefix? "+" <>) rest)))))
-          (lambda (opt)
-            (let ((v (assq opt opts-alist)))
-              (if v
-                  (cdr v)
-                  (raise-exception (format "Unknown option ~a" opt)))))))))))
+        (let ((opts (alist-cons
+                     'plusargs
+                     (filter (cut string-prefix? "+" <>) rest)
+                     (alist-cons
+                      'rest
+                      (remove (cut string-prefix? "+" <>) rest)
+                      (alist-cons
+                       'parallel
+                       (not (opt-get opts 'nopar))
+                       opts)))))
+          (cut opt-get opts <>)))))))
 
 ;;;
 ;;; Run testbench
@@ -1183,7 +1177,7 @@
 
           (cond
            ;; dry run
-           ((opt 'only-show)
+           ((opt 'list)
             (for-each
              (cut tb-print-only <> (opt 'colorize))
              testbenches))
@@ -1281,7 +1275,7 @@
               (load-testbenches files))))
         (cond
          ;; dry run
-         ((opt 'only-show)
+         ((opt 'list)
           (for-each
            (cut tb-print-only <> (opt 'colorize))
            testbenches))
