@@ -754,7 +754,7 @@
                            #:key
                            (plusargs       '())
                            (base-path      #f)
-                           (verbosity      #f)
+                           (verbosity      'default)
                            (keep-output?   #f)
                            (colorize?      #f)
                            (static-output? #f)
@@ -1200,7 +1200,7 @@
                               #:verbosity      (cond
                                                 ((opt 'verbose) 'verbose)
                                                 ((opt 'quiet) 'quiet)
-                                                (else #f))
+                                                (else 'default))
                               #:keep-output?   (or (opt 'keep) (opt 'static))
                               #:colorize?      (opt 'color)
                               #:static-output? (opt 'static)
@@ -1298,7 +1298,7 @@
                             #:verbosity      (cond
                                               ((opt 'verbose) 'verbose)
                                               ((opt 'quiet) 'quiet)
-                                              (else #f))
+                                              (else 'default))
                             #:keep-output?   (or (opt 'keep) (opt 'static))
                             #:colorize?      (opt 'color)
                             #:static-output? (opt 'static)
