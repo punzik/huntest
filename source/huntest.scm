@@ -405,11 +405,23 @@
 (define* (string->filename str #:optional (max-len MAX_LEN_OF_FILENAME))
   (let ((str
          (string-downcase
-          (string-map
-           (lambda (c)
-             (if (or (char-alphabetic? c)
-                     (char-numeric? c)) c #\_))
-           str))))
+          (list->string
+           (reverse
+            (fold
+             (lambda (c s)
+               (cond
+                ((or (char-alphabetic? c)
+                     (char-numeric? c))
+                 (cons c s))
+                ((equal? c #\<) (cons* #\t #\l s))
+                ((equal? c #\>) (cons* #\t #\g s))
+                ((equal? c #\=) (cons* #\q #\e s))
+                ((equal? c #\-) (cons* #\s #\u #\n #\i #\m s))
+                ((equal? c #\+) (cons* #\s #\u #\l #\p s))
+                ((equal? c #\*) (cons* #\l #\u #\m s))
+                ((equal? c #\/) (cons* #\v #\i #\d s))
+                (else (cons #\_ s))))
+             '() (string->list str)))))))
     (if (> (string-length str) max-len)
         (substring str 0 max-len)
         str)))
