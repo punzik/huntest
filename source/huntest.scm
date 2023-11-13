@@ -1198,12 +1198,12 @@
         (let* ((cmdl (command-line))
                (opt (app-options cmdl))
                (testbenches
-                (if (null? (opt 'query))
-                    testbenches
+                (if (opt 'query)
                     (apply lset-union
                            (cons eq?
                                  (map (cut filter-testbenches testbenches <>)
-                                      (opt 'query)))))))
+                                      (opt 'query))))
+                    testbenches)))
 
           (testbenches-link-to-file! testbenches (car cmdl))
 
@@ -1302,12 +1302,12 @@
 
       (let ((testbenches
              ((lambda (tbs)
-                (if (null? (opt 'query))
-                    tbs
+                (if (opt 'query)
                     (apply lset-union
                            (cons eq?
                                  (map (cut filter-testbenches tbs <>)
-                                      (opt 'query))))))
+                                      (opt 'query))))
+                    tbs))
               (load-testbenches files))))
         (cond
          ;; dry run
