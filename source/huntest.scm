@@ -1094,7 +1094,7 @@
   (* "Run testbenches")
   (* "")
   (* "Options:")
-  (* "  -Q, --query <QUERY>  Regexp query string.")
+  (* "  -Q, --query <QUERY>  Regexp query string (multiple allowed).")
   (* "  -k, --keep           Do not delete work directory if test is pass.")
   (* "  -s, --static         Use static work dir for initial debug purposes.")
   (* "                       This option also enable keep option.")
@@ -1141,7 +1141,7 @@
               '()
               '(((recursive #\r) none)
                 ((regex #\x) required)))
-          '(((query #\Q) required)
+          '(((query #\Q) multiple)
             ((verbose #\v) none)
             ((quiet #\q) none)
             ((keep #\k) none)
@@ -1198,9 +1198,12 @@
         (let* ((cmdl (command-line))
                (opt (app-options cmdl))
                (testbenches
-                (if (opt 'query)
-                    (filter-testbenches testbenches (opt 'query))
-                    testbenches)))
+                (if (null? (opt 'query))
+                    testbenches
+                    (apply lset-union
+                           (cons eq?
+                                 (map (cut filter-testbenches testbenches <>)
+                                      (opt 'query)))))))
 
           (testbenches-link-to-file! testbenches (car cmdl))
 
@@ -1298,9 +1301,13 @@
              string<)))
 
       (let ((testbenches
-             ((if (opt 'query)
-                  (cut filter-testbenches <> (opt 'query))
-                  (lambda (x) x))
+             ((lambda (tbs)
+                (if (null? (opt 'query))
+                    tbs
+                    (apply lset-union
+                           (cons eq?
+                                 (map (cut filter-testbenches tbs <>)
+                                      (opt 'query))))))
               (load-testbenches files))))
         (cond
          ;; dry run
