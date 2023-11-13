@@ -544,11 +544,22 @@
                  (let ((test-regex (make-regexp test-regex)))
                    (map
                     (lambda (tb)
-                      (tb-set-tests! tb
-                                     (filter
-                                      (lambda (test) (regexp-exec test-regex (test-name test)))
-                                      (tb-tests tb)))
-                      tb)
+                      (testbench-new (tb-name tb)
+                                     (tb-init tb)
+                                     (tb-finish tb)
+
+                                     (filter (lambda (test)
+                                               (regexp-exec test-regex
+                                                            (test-name test)))
+                                             (tb-tests tb))
+
+                                     (tb-init-pass? tb)
+                                     (tb-init-output tb)
+                                     (tb-fini-pass? tb)
+                                     (tb-fini-output tb)
+                                     (tb-base-path tb)
+                                     (tb-work-path tb)
+                                     (tb-filename tb)))
                     tbs))
                  tbs)))
 
