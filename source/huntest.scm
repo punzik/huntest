@@ -589,15 +589,25 @@
     pass))
 
 ;;;
+;;; Path wrapper
+;;;
+(define (path-wrapper path)
+  (lambda args
+    (if (null? args)
+        path
+        (apply values
+               (map (cut append-path path <>) args)))))
+
+;;;
 ;;; Execute test
 ;;;
 (define (test-execute! tb plusargs test)
   (execute-phase
    (lambda () ((test-func test)
           plusargs
-          (tb-base-path tb)
-          (tb-work-path tb)
-          (test-path test)))
+          (path-wrapper (tb-base-path tb))
+          (path-wrapper (tb-work-path tb))
+          (path-wrapper (test-path test))))
    (lambda (o) (test-set-output! test o))
    (lambda (p) (test-pass! test p))))
 
@@ -608,8 +618,8 @@
   (execute-phase
    (lambda () ((tb-init tb)
           plusargs
-          (tb-base-path tb)
-          (tb-work-path tb)))
+          (path-wrapper (tb-base-path tb))
+          (path-wrapper (tb-work-path tb))))
    (lambda (o) (tb-init-set-output! tb o))
    (lambda (p) (tb-init-pass! tb p))))
 
@@ -620,8 +630,8 @@
   (execute-phase
    (lambda () ((tb-finish tb)
           plusargs
-          (tb-base-path tb)
-          (tb-work-path tb)))
+          (path-wrapper (tb-base-path tb))
+          (path-wrapper (tb-work-path tb))))
    (lambda (o) (tb-fini-set-output! tb o))
    (lambda (p) (tb-fini-pass! tb p))))
 

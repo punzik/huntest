@@ -26,6 +26,7 @@
                            (compile-flags '())
                            (runtime-flags '())
                            (include-paths '())
+                           (parameters '())
                            (defines '()))
 
   (let ((vvp-file (string-append
@@ -36,22 +37,24 @@
      #:init (lambda (plusargs base-path tb-path)
               (let ((includes
                      (map (cut string-append "-I" <>)
-                          (cons base-path include-paths)))
+                          (cons (base-path) include-paths)))
                     (defines
                       (map (cut string-append "-D" <>)
                            (cons*
-                            (string-append "HUNTEST_BASE_DIR='\"" base-path "\"'")
-                            (string-append "HUNTEST_TB_DIR='\"" tb-path "\"'")
+                            (string-append "HUNTEST_BASE_DIR='\"" (base-path) "\"'")
+                            (string-append "HUNTEST_TB_DIR='\"" (tb-path) "\"'")
                             "HUNTEST_TESTBENCH"
-                            defines))))
+                            defines)))
+                    (parameters
+                     (map (cut string-append (format "-P~a." top) <>) parameters)))
                 (zero?
                  (system% (string-append-sep*
                            " "
                            "iverilog" "-o" vvp-file
                            "-s" top
-                           compile-flags defines includes
-                           (append-path base-path sources))
-                          #:base tb-path))))
+                           compile-flags parameters defines includes
+                           (base-path sources))
+                          #:base (tb-path)))))
 
      #:tests (make-test
               #:name top
@@ -68,7 +71,7 @@
                              " "
                              "vvp"
                              reg-flags
-                             (append-path tb-path vvp-file)
+                             (tb-path vvp-file)
                              ext-flags
                              plusargs)
-                            #:base test-path))))))))
+                            #:base (test-path)))))))))
