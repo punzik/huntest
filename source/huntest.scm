@@ -1116,7 +1116,7 @@
   (when (not (%run-standalone%))
     (* "  -r, --recursive      Recursive search for script files.")
     (* "  -x, --regex <REGEX>  Regular expression for searching script files. Default: '~a'" TEST_SCRIPT_REGEX))
-  (* "  -l, --list           List testbenches.")
+  (* "  -l, --list           List testbenches. Nothing is executed.")
   (* "  -v, --verbose        Verbose output.")
   (* "  -q, --quiet          Quiet output.")
   (* "  -V, --version        Print version.")
