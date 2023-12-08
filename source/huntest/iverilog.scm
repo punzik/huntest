@@ -3,7 +3,7 @@
 (define-module (huntest iverilog))
 
 (export
- simple-testbench)
+ test-body-simple)
 
 (import
  (huntest)
@@ -17,61 +17,59 @@
  (srfi srfi-39))                        ; Parameters
 
 ;;;
-;;; Simple iverilog testbench with one test
+;;; Simple iverilog testbench test body function
 ;;;
-(define* (simple-testbench #:key
+(define* (test-body-simple #:key
                            sources
                            top
-                           (name top)
                            (compile-flags '())
                            (runtime-flags '())
                            (include-paths '())
                            (parameters '())
-                           (defines '()))
+                           (defines '())
+                           (init (lambda args #t))
+                           (finish (lambda args #t)))
+  (lambda (plusargs base-path tb-path test-path)
+    (let ((vvp-file (string-append top ".vvp"))
+          (includes
+           (map (cut string-append "-I" <>)
+                (cons (base-path) include-paths)))
+          (defines
+            (map (cut string-append "-D" <>)
+                 (cons*
+                  (string-append "HUNTEST_BASE_DIR='\"" (base-path) "\"'")
+                  (string-append "HUNTEST_TB_DIR='\"" (tb-path) "\"'")
+                  "HUNTEST_TESTBENCH"
+                  defines)))
+          (parameters
+           (map (cut string-append (format "-P~a." top) <>) parameters)))
 
-  (let ((vvp-file (string-append
-                   (string->filename name)
-                   ".vvp")))
-    (make-testbench
-     #:name name
-     #:init (lambda (plusargs base-path tb-path)
-              (let ((includes
-                     (map (cut string-append "-I" <>)
-                          (cons (base-path) include-paths)))
-                    (defines
-                      (map (cut string-append "-D" <>)
-                           (cons*
-                            (string-append "HUNTEST_BASE_DIR='\"" (base-path) "\"'")
-                            (string-append "HUNTEST_TB_DIR='\"" (tb-path) "\"'")
-                            "HUNTEST_TESTBENCH"
-                            defines)))
-                    (parameters
-                     (map (cut string-append (format "-P~a." top) <>) parameters)))
-                (zero?
-                 (system% (string-append-sep*
-                           " "
-                           "iverilog" "-o" vvp-file
-                           "-s" top
-                           compile-flags parameters defines includes
-                           (base-path sources))
-                          #:base (tb-path)))))
+      (let-values (((ext-flags reg-flags)
+                    (partition
+                     (lambda (flag)
+                       (any (cut string-prefix? <> flag)
+                            '("-vcd" "-lxt" "-lx2" "-fst" "-none" "-sdf" "-compatible")))
+                     runtime-flags)))
 
-     #:tests (make-test
-              #:name top
-              #:body
-              (lambda (plusargs base-path tb-path test-path)
-                (let-values (((ext-flags reg-flags)
-                              (partition
-                               (lambda (flag)
-                                 (any (cut string-prefix? <> flag)
-                                      '("-vcd" "-lxt" "-lx2" "-fst" "-none" "-sdf" "-compatible")))
-                               runtime-flags)))
-                  (zero?
-                   (system% (string-append-sep*
-                             " "
-                             "vvp"
-                             reg-flags
-                             (tb-path vvp-file)
-                             ext-flags
-                             plusargs)
-                            #:base (test-path)))))))))
+        (and (init plusargs base-path tb-path test-path)
+             (let ((retval
+                    (and (zero?
+                          (system% (string-append-sep*
+                                    " "
+                                    "iverilog" "-o" vvp-file
+                                    "-s" top
+                                    compile-flags parameters defines includes
+                                    (base-path sources))
+                                   #:base (test-path)))
+                         (zero?
+                          (system% (string-append-sep*
+                                    " "
+                                    "vvp"
+                                    reg-flags
+                                    (test-path vvp-file)
+                                    ext-flags
+                                    plusargs)
+                                   #:base (test-path))))))
+
+               (and (finish plusargs base-path tb-path test-path)
+                    retval)))))))

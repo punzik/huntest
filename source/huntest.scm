@@ -16,7 +16,7 @@
  find-plusarg
  list-add-separator
  list-dir
- list-flatten
+ list-flat
  println
  sort-uniq
  string->filename
@@ -41,7 +41,7 @@
  (ice-9 atomic)
  (ice-9 regex))
 
-(define APP_VERSION          "0.1.0")
+(define APP_VERSION          "0.2.0")
 
 (define WORK_DIR_PREFIX      "")
 (define TEST_DIR_PREFIX      "")
@@ -164,21 +164,23 @@
 ;;;
 ;;; Flatten nested lists
 ;;;
-(define (list-flatten lst)
-  (if (null? lst) '()
-      (fold-right
-       (lambda (x out)
-         (if (list? x)
-             (append (list-flatten x) out)
-             (cons x out)))
-       '() lst)))
+(define (list-flat . lst)
+  (fold-right
+   (lambda (x out)
+     (cond
+      ((null? x) out)
+      ((pair? x) (append (list-flat (car x))
+                         (list-flat (cdr x))
+                         out))
+      (else (cons x out))))
+   '() lst))
 
 ;;;
 ;;; Recursively append strings and list of strings
 ;;;
 (define (string-append* . strings)
   (string-concatenate
-   (list-flatten strings)))
+   (list-flat strings)))
 
 ;;;
 ;;; Recursively append strings and list of strings with separator
@@ -187,7 +189,7 @@
   (string-concatenate
    (list-add-separator
     sep
-    (list-flatten strings))))
+    (list-flat strings))))
 
 ;;;
 ;;; Random string
@@ -1053,7 +1055,7 @@
 ;;; Print log level verilog defines
 ;;;
 (define (print-verilog-defines)
-  (define (* . fmt) (apply println fmt))
+  (define * println)
   (let ((tags
          (map (lambda (tag)
                 (cons
@@ -1099,7 +1101,7 @@
 ;;; Print help
 ;;;
 (define (print-help app-name)
-  (define (* . fmt) (apply println fmt))
+  (define * println)
   (* "Usage: ~a [OPTION]... [PLUSARGS]" app-name)
   (* "Run testbenches")
   (* "")
@@ -1202,7 +1204,7 @@
 ;;; Run testbench
 ;;;
 (define* (run . testbenches)
-  (let ((testbenches (list-flatten testbenches)))
+  (let ((testbenches (list-flat testbenches)))
     (if (%run-standalone%)
         ;; For standalone run
         (let* ((cmdl (command-line))
@@ -1261,7 +1263,7 @@
            (eprintln "~a\n" e)
            tbs)
        (lambda ()
-         (let ((t (list-flatten (load file))))
+         (let ((t (list-flat (load file))))
            (if (or (testbench? t)
                    (and (list? t)
                         (every testbench? t)))

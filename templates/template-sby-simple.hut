@@ -3,7 +3,7 @@
 
 ;; (add-to-load-path "/<huntest>/source")
 (import (prefix (huntest) hut::)
-        (prefix (huntest iverilog) iverilog::))
+        (prefix (huntest sby) sby::))
 
 (hut::run
  (hut::make-testbench
@@ -12,14 +12,13 @@
   (hut::make-test
    #:name "test name"
    #:body
-   (iverilog::test-body-simple
+   (sby::test-body-simple
     #:sources '("template-iverilog-simple-tb.sv")
     #:top "testbench"
     ;; optional arguments
-    #:compile-flags '()         ; e.g "-g2012"
-    #:runtime-flags '()         ; e.g "-fst"
-    #:include-paths '()
-    #:defines '()
-    #:parameters '()
+    #:mode 'bmc
+    #:depth 20
+    #:engine 'yices
+    #:frontend 'yosys-verilog
     #:init (lambda (plusargs base-path tb-path test-path) #t)
     #:finish (lambda (plusargs base-path tb-path test-path) #t)))))
