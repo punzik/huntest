@@ -33,16 +33,25 @@
     (let ((vvp-file (string-append top ".vvp"))
           (includes
            (map (cut string-append "-I" <>)
-                (cons (base-path) include-paths)))
+                (cons (base-path)
+                      (map base-path include-paths))))
           (defines
             (map (cut string-append "-D" <>)
                  (cons*
                   (string-append "HUNTEST_BASE_DIR='\"" (base-path) "\"'")
                   (string-append "HUNTEST_TB_DIR='\"" (tb-path) "\"'")
                   "HUNTEST_TESTBENCH"
-                  defines)))
+                  (map
+                   (lambda (def)
+                     (if (list? def)
+                         (format "~a=~a" (car def) (cadr def))
+                         def))
+                   defines))))
           (parameters
-           (map (cut string-append (format "-P~a." top) <>) parameters)))
+           ;; (map (cut string-append (format "-P~a." top) <>) parameters)
+           (map (lambda (p)
+                  (format "-P~a.~a=~a" top (first p) (second p)))
+                parameters)))
 
       (let-values (((ext-flags reg-flags)
                     (partition
