@@ -15,7 +15,8 @@
  (srfi srfi-26)                         ; Currying with cut
  (srfi srfi-28)                         ; Simple format
  (srfi srfi-37)                         ; args-fold
- (srfi srfi-39))                        ; Parameters
+ (srfi srfi-39)                         ; Parameters
+ (ice-9 string-fun))
 
 (define* (test-body-simple #:key
                            sources
@@ -27,7 +28,8 @@
                            (engine 'yices)
                            (frontend 'yosys-verilog)
                            (init (lambda args #t))
-                           (finish (lambda args #t)))
+                           (finish (lambda args #t))
+                           (strip-output #f))
   (lambda (plusargs base-path tb-path test-path)
     (and (init plusargs base-path tb-path test-path)
          (let ((sources
@@ -51,9 +53,16 @@
                                  #:frontend frontend))))
            (let ((retval
                   (zero?
-                   (hut::system%
-                    (format "sby -f ~a" sby-file)
-                    #:base (test-path)))))
+                   (let-values
+                       (((retval output)
+                         (hut::system%-capture
+                          (format "sby -f ~a" sby-file)
+                          #:base (test-path))))
+                     (display
+                      (if strip-output
+                          (string-replace-substring output (string-append "" (base-path) "/")  "")
+                          output))
+                     retval))))
 
              (and (finish plusargs base-path tb-path test-path)
                   retval))))))
@@ -76,7 +85,7 @@
    ;; -- Options and targets
    "[options]"
    (* "mode ~a"
-      (or (and (memq mode '(bmc prove))
+      (or (and (memq mode '(bmc prove cover))
                (symbol->string mode))
           (raise-exception
            (format "Error: unknown sby mode: '~a'\n" mode))))
@@ -116,7 +125,7 @@
           (let ((file (basename file)))
             (case frontend
               ((yosys-verilog)
-               (* "read -formal -vlog2k ~a" file))
+               (* "read -formal ~a" file))
               ((yosys-systemverilog)
                (* "read -formal -sv ~a" file))
               ((verific)
@@ -131,11 +140,8 @@
        "read_systemverilog -link"
        '())
    ;; Parameters
-   (map (lambda (param)
-          (let* ((name (car param))
-                 (value (cadr param))
-                 (value (if (number? value) value (* "\"~a\"" value))))
-            (* "chparam -set ~a ~a ~a" name value top)))
+   (map (lambda (p)
+          (* "chparam -set ~a ~a ~a" (first p) (second p) top))
         parameters)
    ;; Prepare sources
    (* "prep -top ~a" top)
