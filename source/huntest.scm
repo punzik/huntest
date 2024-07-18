@@ -255,13 +255,14 @@
 ;;;
 ;;; As system% but returns values of retval and output as string
 ;;;
-(define* (system%-capture cmd #:key (base #f))
+(define* (system%-capture cmd #:key (base #f) (stderr #t))
   ;; Echo command
   (println "RUN: ~a" cmd)
   ;; Execute
   (let* ((cmd (string-append
                (if base (format "cd ~a; " base) "")
-               cmd " 2>&1"))
+               cmd
+               (if stderr " 2>&1" "")))
          (p (open-input-pipe cmd)))
     (let ((output (get-string-all p)))
       (values (close-pipe p)
