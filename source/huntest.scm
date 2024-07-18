@@ -598,8 +598,15 @@
     (if (null? args)
         path
         (apply values
-               (map (cut append-path path <>) args)))))
-
+               (map
+                (lambda (arg)
+                  (let ((conv (lambda (x) (if (absolute-file-name? x)
+                                         x
+                                         (append-path path x)))))
+                    (if (list? arg)
+                        (map conv arg)
+                        (conv arg))))
+                args)))))
 ;;;
 ;;; Execute test
 ;;;
