@@ -786,29 +786,42 @@
 ;;; Print pass/fail statistics
 ;;;
 (define (print-summary testbenches colorize?)
-  (let ((colorize (if colorize? string-colorize (lambda (s c) s)))
-        (tb-count (length testbenches))
-        (test-count (apply
+  (let* ((colorize (if colorize? string-colorize (lambda (s c) s)))
+         (tb-count (length testbenches))
+         (test-count (apply
+                      +
+                      (map (lambda (tb) (length (tb-tests tb))) testbenches)))
+         (tb-succ (length
+                   (filter
+                    (lambda (tb)
+                      (and (tb-init-pass? tb)
+                           (tb-fini-pass? tb)
+                           (every test-pass? (tb-tests tb))))
+                    testbenches)))
+         (test-succ (apply
                      +
-                     (map (lambda (tb) (length (tb-tests tb))) testbenches)))
-        (tb-succ (length
-                  (filter
-                   (lambda (tb)
-                     (and (tb-init-pass? tb)
-                          (tb-fini-pass? tb)
-                          (every test-pass? (tb-tests tb))))
-                   testbenches)))
-        (test-succ (apply
-                    +
-                    (map (lambda (tb) (length (filter test-pass? (tb-tests tb))))
-                         testbenches))))
+                     (map (lambda (tb) (length (filter test-pass? (tb-tests tb))))
+                          testbenches)))
+         (tb-fail (- tb-count tb-succ))
+         (test-fail (- test-count test-succ)))
 
     (display (colorize (format "## ALL  ~a (~a)\n" tb-count test-count) LOG_HEAD_COLOR))
     (display (colorize (format "## PASS ~a (~a)\n" tb-succ test-succ) LOG_SUCC_COLOR))
-    (display (colorize (format "## FAIL ~a (~a)\n"
-                               (- tb-count tb-succ)
-                               (- test-count test-succ))
-                       LOG_FAIL_COLOR))))
+    (display (colorize (format "## FAIL ~a (~a)\n" tb-fail test-fail) LOG_FAIL_COLOR))
+
+    (when (not (zero? tb-fail))
+      (newline)
+      (display (colorize "## List of failed testbenches\n" LOG_FAIL_COLOR))
+      (for-each
+       (lambda (tb) (display (colorize (format "  ~a: ~a\n"
+                                          (tb-base-path tb)
+                                          (tb-filename tb))
+                                  LOG_FAIL_COLOR)))
+       (filter (lambda (tb)
+                 (not (and (tb-init-pass? tb)
+                           (tb-fini-pass? tb)
+                           (every test-pass? (tb-tests tb)))))
+               testbenches)))))
 
 ;;;
 ;;; Make dir reqursive
