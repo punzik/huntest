@@ -13,6 +13,7 @@
  append-path
  delete-recursive
  find-files
+ project-root
  find-plusarg
  list-add-separator
  list-dir
@@ -405,6 +406,16 @@
           (for-each delete-recursive (list-dir path))
           (rmdir path))
         (delete-file path))))
+
+;;;
+;;; Find project root
+;;;
+(define (project-root path)
+  (let ((path (canonicalize-path path)))
+    (if (or (string= path "/")
+            (file-exists? (string-append path "/.git")))
+        path
+        (project-root (string-append path "/..")))))
 
 ;;;
 ;;; Useful print function
