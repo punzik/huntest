@@ -68,7 +68,9 @@
                                     "iverilog" "-o" vvp-file
                                     "-s" top
                                     compile-flags parameters defines includes
-                                    (base-path sources))
+                                    (base-path (if (procedure? sources)
+                                                   (sources plusargs base-path tb-path test-path)
+                                                   sources)))
                                    #:base (test-path)))
                          (zero?
                           (system% (string-append-sep*

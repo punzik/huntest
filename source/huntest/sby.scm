@@ -25,6 +25,7 @@
                            (defines '())
                            (mode 'bmc)
                            (depth 20)
+                           (append 0)
                            (engine 'yices)
                            (frontend 'yosys-verilog)
                            (init (lambda args #t))
@@ -37,7 +38,9 @@
                        (if (absolute-file-name? file)
                            file
                            (base-path file)))
-                     sources))
+                     (if (procedure? sources)
+                         (sources plusargs base-path tb-path test-path)
+                         sources)))
                (sby-file (test-path (format "~a.sby" top))))
            (with-output-to-file sby-file
              (lambda ()
@@ -49,6 +52,7 @@
                                  #:defines defines
                                  #:mode mode
                                  #:depth depth
+                                 #:append append
                                  #:engine engine
                                  #:frontend frontend))))
            (let ((retval
@@ -78,6 +82,7 @@
                           (defines '())
                           (mode 'bmc)
                           (depth 20)
+                          (append 20)
                           (engine 'yices)
                           (frontend 'yosys-verilog))
   (define * format)
@@ -90,6 +95,9 @@
           (raise-exception
            (format "Error: unknown sby mode: '~a'\n" mode))))
    (* "depth ~a" depth)
+   (if (zero? append)
+       ""
+       (* "append ~a" append))
 
    ;; -- Engines
    "[engines]"
