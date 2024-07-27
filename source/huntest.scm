@@ -648,10 +648,10 @@
 (define (test-execute! tb plusargs test)
   (execute-phase
    (lambda () ((test-func test)
-          plusargs
-          (path-wrapper (tb-base-path tb))
-          (path-wrapper (tb-work-path tb))
-          (path-wrapper (test-path test))))
+               plusargs
+               (path-wrapper (tb-base-path tb))
+               (path-wrapper (tb-work-path tb))
+               (path-wrapper (test-path test))))
    (lambda (o) (test-set-output! test o))
    (lambda (p) (test-pass! test p))))
 
@@ -661,9 +661,9 @@
 (define* (tb-init-execute! tb plusargs)
   (execute-phase
    (lambda () ((tb-init tb)
-          plusargs
-          (path-wrapper (tb-base-path tb))
-          (path-wrapper (tb-work-path tb))))
+               plusargs
+               (path-wrapper (tb-base-path tb))
+               (path-wrapper (tb-work-path tb))))
    (lambda (o) (tb-init-set-output! tb o))
    (lambda (p) (tb-init-pass! tb p))))
 
@@ -673,9 +673,9 @@
 (define* (tb-fini-execute! tb plusargs)
   (execute-phase
    (lambda () ((tb-finish tb)
-          plusargs
-          (path-wrapper (tb-base-path tb))
-          (path-wrapper (tb-work-path tb))))
+               plusargs
+               (path-wrapper (tb-base-path tb))
+               (path-wrapper (tb-work-path tb))))
    (lambda (o) (tb-fini-set-output! tb o))
    (lambda (p) (tb-fini-pass! tb p))))
 
