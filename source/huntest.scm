@@ -846,6 +846,7 @@
                            (base-path      #f)
                            (verbosity      'default)
                            (keep-output?   #f)
+                           (keep-tb-path?  #f)
                            (colorize?      #f)
                            (static-output? #f)
                            (parallel?      #f))
@@ -858,14 +859,15 @@
 
       (if static-output?
           ;; static work path
-          (let ((work-path
+          (let ((tb-path
                  (append-path base-path
                               (format "~a~a-~a" WORK_DIR_PREFIX
                                       script-name (string->filename (tb-name tb))))))
-            (when (file-exists? work-path)
-              (delete-recursive work-path))
-            (mkdir work-path)
-            work-path)
+            (when (and (file-exists? tb-path)
+                       (not keep-tb-path?))
+              (delete-recursive tb-path)
+              (mkdir tb-path))
+            tb-path)
           ;; dynamic work path
           (mkdtemp
            (append-path base-path
@@ -876,14 +878,15 @@
                                 (current-time)))))))
 
   ;; Make test directory
-  (define (prepare-test-path test work-path)
+  (define (prepare-test-path test tb-path)
     (let ((test-path
-           (append-path work-path
+           (append-path tb-path
                         (format "~a~a" TEST_DIR_PREFIX
                                 (string->filename (test-name test))))))
       (if (file-exists? test-path)
-          (raise-exception
-           (format "Fatal error: test path exists: '~a'\n" test-path))
+          (when (not keep-tb-path?)
+            (raise-exception
+             (format "Fatal error: test path exists: '~a'\n" test-path)))
           (mkdir test-path))
       ;; (canonicalize-path)
       test-path))
@@ -1163,11 +1166,12 @@
   (* "Options:")
   (* "  -Q, --query <QUERY>  Regexp query string (multiple allowed).")
   (* "  -k, --keep           Do not delete work directory if test is pass.")
+  (* "  -i, --incremental    Do not delete existing work directory in static mode")
   (* "  -s, --static         Use static work dir for initial debug purposes.")
   (* "                       This option also enable keep option.")
   (* "  -w, --work <PATH>    Work path. Default: base path of the script.")
   (* "  -c, --color          Colorize output.")
-  (* "  -i, --nopar          Sequential execution.")
+  (* "  -n, --nopar          Sequential execution.")
   (* "  -C, --clean          Delete work folders.")
   (* "  -f, --defines        Print useful Verilog defines.")
   (when (not (%run-standalone%))
@@ -1212,10 +1216,11 @@
             ((verbose #\v) none)
             ((quiet #\q) none)
             ((keep #\k) none)
+            ((incremental #\i) none)
             ((color #\c) none)
             ((static #\s) none)
             ((work #\w) required)
-            ((nopar #\i) none)
+            ((nopar #\n) none)
             ((clean #\C) none)
             ((list #\l) none)
             ((defines #\f) none)
@@ -1295,6 +1300,7 @@
                                                 ((opt 'quiet) 'quiet)
                                                 (else 'default))
                               #:keep-output?   (or (opt 'keep) (opt 'static))
+                              #:keep-tb-path?  (and (opt 'static) (opt 'incremental))
                               #:colorize?      (opt 'color)
                               #:static-output? (opt 'static)
                               #:parallel?      (opt 'parallel))
@@ -1397,6 +1403,7 @@
                                               ((opt 'quiet) 'quiet)
                                               (else 'default))
                             #:keep-output?   (or (opt 'keep) (opt 'static))
+                            #:keep-tb-path?  (and (opt 'static) (opt 'incremental))
                             #:colorize?      (opt 'color)
                             #:static-output? (opt 'static)
                             #:parallel?      (opt 'parallel))
