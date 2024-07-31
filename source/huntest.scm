@@ -498,12 +498,13 @@
 ;;; Testbench struct
 ;;;
 (define-record-type <testbench>
-  (testbench-new name init finish tests
+  (testbench-new name help init finish tests
                  init-pass init-output
                  fini-pass fini-output
                  base-path work-path filename)
   testbench?
   (name tb-name)
+  (help tb-help)
   (init tb-init)
   (finish tb-finish)
   (tests tb-tests tb-set-tests!)
@@ -528,6 +529,7 @@
 ;;;
 (define* (make-testbench #:key
                          (name "")
+                         (help #f)
                          (init (lambda args #t))
                          (finish (lambda args #t))
                          (tests '()))
@@ -542,7 +544,7 @@
          tests
          (rename-duplicates (map test-name tests) string=?))
 
-    (testbench-new name init finish tests
+    (testbench-new name help init finish tests
                    #f '() #f '() #f #f #f)))
 
 ;;;
@@ -582,6 +584,7 @@
                    (map
                     (lambda (tb)
                       (testbench-new (tb-name tb)
+                                     (tb-help tb)
                                      (tb-init tb)
                                      (tb-finish tb)
 
@@ -765,7 +768,20 @@
                                          (tb-name tb)
                                          (test-name test))
                                  LOG_INFO_COLOR)))
-     (tb-tests tb))))
+     (tb-tests tb))
+
+    (let ((help (tb-help tb)))
+      (when help
+        (display "   Help:\n")
+        (for-each
+         (lambda (l) (display (format "     ~a\n" l)))
+         (string-split
+          (string-trim-both
+           (if (list? help)
+               (string-join help "\n")
+               help)
+           #\newline)
+          #\newline))))))
 
 ;;;
 ;;; Clear testbench output dir
@@ -865,7 +881,8 @@
                                       script-name (string->filename (tb-name tb))))))
             (when (and (file-exists? tb-path)
                        (not keep-tb-path?))
-              (delete-recursive tb-path)
+              (delete-recursive tb-path))
+            (when (not (file-exists? tb-path))
               (mkdir tb-path))
             tb-path)
           ;; dynamic work path
