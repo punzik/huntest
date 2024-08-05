@@ -70,10 +70,11 @@
 ;;; Fail tags list
 (define fail-tags '(fail))
 
-(define LOG_HEAD_COLOR 14)
-(define LOG_INFO_COLOR 6)
-(define LOG_SUCC_COLOR 47)
-(define LOG_FAIL_COLOR 196)
+(define LOG_HEAD_COLOR  14)
+(define LOG_DEFER_COLOR 244)
+(define LOG_INFO_COLOR  6)
+(define LOG_SUCC_COLOR  47)
+(define LOG_FAIL_COLOR  196)
 
 ;;;
 ;;; Colorize text
@@ -498,13 +499,15 @@
 ;;; Testbench struct
 ;;;
 (define-record-type <testbench>
-  (testbench-new name help init finish tests
+  (testbench-new name help defer
+                 init finish tests
                  init-pass init-output
                  fini-pass fini-output
                  base-path work-path filename)
   testbench?
   (name tb-name)
   (help tb-help)
+  (defer tb-defer tb-set-defer!)
   (init tb-init)
   (finish tb-finish)
   (tests tb-tests tb-set-tests!)
@@ -530,6 +533,7 @@
 (define* (make-testbench #:key
                          (name "")
                          (help #f)
+                         (defer #f)
                          (init (lambda args #t))
                          (finish (lambda args #t))
                          (tests '()))
@@ -544,8 +548,14 @@
          tests
          (rename-duplicates (map test-name tests) string=?))
 
-    (testbench-new name help init finish tests
+    (testbench-new name help defer init finish tests
                    #f '() #f '() #f #f #f)))
+
+;;;
+;;; Undefer testbench
+;;;
+(define (tb-undefer tb)
+  (tb-set-defer! tb #f))
 
 ;;;
 ;;; Filter testbenches by regexp query
@@ -585,6 +595,7 @@
                     (lambda (tb)
                       (testbench-new (tb-name tb)
                                      (tb-help tb)
+                                     (tb-defer tb)
                                      (tb-init tb)
                                      (tb-finish tb)
 
@@ -756,7 +767,13 @@
 ;;;
 (define (tb-print-only tb colorize?)
   (let ((string-colorize (if colorize? string-colorize (lambda (s c) s))))
-    (display (string-colorize (format "TESTBENCH ~a : ~a\n"
+    (if colorize?
+        (display (string-colorize "TESTBENCH"
+                                  (if (tb-defer tb)
+                                      LOG_DEFER_COLOR
+                                      LOG_HEAD_COLOR)))
+        (display (format "~aTESTBENCH" (if (tb-defer tb) "-" ""))))
+    (display (string-colorize (format " ~a : ~a\n"
                                       (tb-name tb)
                                       (append-path
                                        (tb-base-path tb)
@@ -1195,6 +1212,7 @@
     (* "  -r, --recursive      Recursive search for script files.")
     (* "  -x, --regex <REGEX>  Regular expression for searching script files. Default: '~a'" TEST_SCRIPT_REGEX))
   (* "  -l, --list           List testbenches. Nothing is executed.")
+  (* "  -a, --list-all       List testbenches. Ignore query and defer.")
   (* "  -v, --verbose        Verbose output.")
   (* "  -q, --quiet          Quiet output.")
   (* "  -V, --version        Print version.")
@@ -1240,6 +1258,7 @@
             ((nopar #\n) none)
             ((clean #\C) none)
             ((list #\l) none)
+            ((list-all #\a) none)
             ((defines #\f) none)
             ((version #\V) none)
             ((help #\h) none)))))
@@ -1278,53 +1297,68 @@
           (cut opt-get opts <>)))))))
 
 ;;;
-;;; Run testbench
+;;; Run testbenches with command line arguments
+;;;
+(define (run-with-opts testbenches opt)
+  (if (opt 'list-all)
+      ;; list all testbenches
+      (for-each (cut tb-print-only <> (opt 'color)) testbenches)
+
+      ;; filter and process testbenches
+      (let ((testbenches
+             (if (opt 'query)
+                 (apply lset-union
+                        (cons eq?
+                              (map (cut filter-testbenches testbenches <>)
+                                   (opt 'query))))
+                 (filter
+                  (lambda (tb) (not (tb-defer tb)))
+                  testbenches))))
+
+        (for-each tb-undefer testbenches)
+
+        (cond
+         ;; list testbenches
+         ((opt 'list)
+          (for-each
+           (cut tb-print-only <> (opt 'color))
+           testbenches))
+
+         ;; clean outputs
+         ((opt 'clean)
+          (force-delete-outputs testbenches (opt 'work)))
+
+         ;; run testbenches
+         (else
+          (run-testbenches! testbenches
+                            #:base-path      (opt 'work)
+                            #:plusargs       (opt 'plusargs)
+                            #:verbosity      (cond
+                                              ((opt 'verbose) 'verbose)
+                                              ((opt 'quiet) 'quiet)
+                                              (else 'default))
+                            #:keep-output?   (or (opt 'keep) (opt 'static))
+                            #:keep-tb-path?  (and (opt 'static) (opt 'incremental))
+                            #:colorize?      (opt 'color)
+                            #:static-output? (opt 'static)
+                            #:parallel?      (opt 'parallel))
+          (when (not (testbenches-pass? testbenches))
+            (exit -1))))
+
+        (exit 0))))
+
+;;;
+;;; Run testbench from script
 ;;;
 (define* (run . testbenches)
   (let ((testbenches (list-flat testbenches)))
     (if (%run-standalone%)
         ;; For standalone run
         (let* ((cmdl (command-line))
-               (opt (app-options cmdl))
-               (testbenches
-                (if (opt 'query)
-                    (apply lset-union
-                           (cons eq?
-                                 (map (cut filter-testbenches testbenches <>)
-                                      (opt 'query))))
-                    testbenches)))
+               (opt (app-options cmdl)))
 
           (testbenches-link-to-file! testbenches (car cmdl))
-
-          (cond
-           ;; dry run
-           ((opt 'list)
-            (for-each
-             (cut tb-print-only <> (opt 'color))
-             testbenches))
-
-           ;; clean outputs
-           ((opt 'clean)
-            (force-delete-outputs testbenches (opt 'work)))
-
-           ;; run testbenches
-           (else
-            (run-testbenches! testbenches
-                              #:base-path      (opt 'work)
-                              #:plusargs       (opt 'plusargs)
-                              #:verbosity      (cond
-                                                ((opt 'verbose) 'verbose)
-                                                ((opt 'quiet) 'quiet)
-                                                (else 'default))
-                              #:keep-output?   (or (opt 'keep) (opt 'static))
-                              #:keep-tb-path?  (and (opt 'static) (opt 'incremental))
-                              #:colorize?      (opt 'color)
-                              #:static-output? (opt 'static)
-                              #:parallel?      (opt 'parallel))
-            (when (not (testbenches-pass? testbenches))
-              (exit -1))))
-
-          (exit 0))
+          (run-with-opts testbenches opt))
 
         ;; For run from upper level code
         testbenches)))
@@ -1390,41 +1424,4 @@
                        '() (opt 'rest))))
              string<)))
 
-      (let ((testbenches
-             ((lambda (tbs)
-                (if (opt 'query)
-                    (apply lset-union
-                           (cons eq?
-                                 (map (cut filter-testbenches tbs <>)
-                                      (opt 'query))))
-                    tbs))
-              (load-testbenches files))))
-        (cond
-         ;; dry run
-         ((opt 'list)
-          (for-each
-           (cut tb-print-only <> (opt 'color))
-           testbenches))
-
-         ;; clean outputs
-         ((opt 'clean)
-          (force-delete-outputs testbenches (opt 'work)))
-
-         ;; run testbenches
-         (else
-          (run-testbenches! testbenches
-                            #:base-path      (opt 'work)
-                            #:plusargs       (opt 'plusargs)
-                            #:verbosity      (cond
-                                              ((opt 'verbose) 'verbose)
-                                              ((opt 'quiet) 'quiet)
-                                              (else 'default))
-                            #:keep-output?   (or (opt 'keep) (opt 'static))
-                            #:keep-tb-path?  (and (opt 'static) (opt 'incremental))
-                            #:colorize?      (opt 'color)
-                            #:static-output? (opt 'static)
-                            #:parallel?      (opt 'parallel))
-          (when (not (testbenches-pass? testbenches))
-            (exit -1))))
-
-        (exit 0)))))
+      (run-with-opts (load-testbenches files) opt))))

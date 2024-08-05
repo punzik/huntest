@@ -20,7 +20,8 @@ Options:
   -f, --defines        Print useful Verilog defines.
   -r, --recursive      Recursive search for script files.
   -x, --regex <REGEX>  Regular expression for searching script files. Default: '\.hut$'
-  -n, --only-show      Show testbenches only.
+  -l, --list           List testbenches. Nothing is executed.
+  -a, --list-all       List testbenches. Ignore query and defer.
   -v, --verbose        Verbose output.
   -q, --quiet          Quiet output.
   -V, --version        Print version.

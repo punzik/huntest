@@ -7,6 +7,8 @@
 (define testbench
   (hut::make-testbench
    #:name "testbench name"
+   #:help "No options"
+   #:defer #f
 
    ;; Initialization (optional)
    #:init
