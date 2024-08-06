@@ -487,9 +487,10 @@
 ;;; Test struct
 ;;;
 (define-record-type <test>
-  (test-new name func pass output path)
+  (test-new name expect-fail func pass output path)
   test?
   (name test-name test-set-name!)
+  (expect-fail test-expect-fail)
   (func test-func)
   (pass test-pass? test-pass!)
   (output test-output test-set-output!)
@@ -522,10 +523,10 @@
 ;;;
 ;;; Test constructor
 ;;;
-(define* (make-test #:key (name "") (body (lambda args #f)))
+(define* (make-test #:key (name "") (expect-fail #f) (body (lambda args #f)))
   (let* ((name (string-trim-both name))
          (name (if (string-null? name) UNNAMED_TEST_NAME name)))
-    (test-new name body #f '() #f)))
+    (test-new name expect-fail body #f '() #f)))
 
 ;;;
 ;;; Testbench constructor
@@ -620,7 +621,7 @@
 ;;;
 ;;; Execute function with intercept of output
 ;;;
-(define (execute-phase func set-output! set-pass!)
+(define (execute-phase func set-output! set-pass! expect-fail)
   (let* ((pass #f)
          (output (string-split
                   (string-trim-both
@@ -633,7 +634,9 @@
                          (lambda () (set! pass (func)))
                          #:unwind? #t))))
                   #\newline))
-         (pass (and pass (not (tag-fail? output)))))
+         (pass (and pass
+                    ((if expect-fail values not)
+                     (tag-fail? output)))))
 
     (set-output! output)
     (set-pass! pass)
@@ -667,7 +670,8 @@
                (path-wrapper (tb-work-path tb))
                (path-wrapper (test-path test))))
    (lambda (o) (test-set-output! test o))
-   (lambda (p) (test-pass! test p))))
+   (lambda (p) (test-pass! test p))
+   (test-expect-fail test)))
 
 ;;;
 ;;; Execute testbench init
@@ -679,7 +683,8 @@
                (path-wrapper (tb-base-path tb))
                (path-wrapper (tb-work-path tb))))
    (lambda (o) (tb-init-set-output! tb o))
-   (lambda (p) (tb-init-pass! tb p))))
+   (lambda (p) (tb-init-pass! tb p))
+   #f))
 
 ;;;
 ;;; Execute testbench destructor
@@ -691,7 +696,8 @@
                (path-wrapper (tb-base-path tb))
                (path-wrapper (tb-work-path tb))))
    (lambda (o) (tb-fini-set-output! tb o))
-   (lambda (p) (tb-fini-pass! tb p))))
+   (lambda (p) (tb-fini-pass! tb p))
+   #f))
 
 ;;;
 ;;; Format testbench output log

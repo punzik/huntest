@@ -20,6 +20,7 @@
    #:tests
    (hut::make-test
      #:name "test name"
+     #:expect-fail #f
      #:body
      (lambda (plusargs base-path testbench-path test-path)
        ;; Test code
