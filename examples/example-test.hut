@@ -34,8 +34,8 @@
            ;; Test code
            (hut::println "test ~a" m)
            (hut::println 'info "PWD: ~a" (getcwd))
-           (hut::system% (format "echo \"Hello testbench, test ~a!\" > ~a/hello.txt" m test-path))
-           (hut::system% (format "cat ~a/hello.txt" test-path))
+           (hut::system% (format "echo \"Hello testbench, test ~a!\" > ~a/hello.txt" m (test-path)))
+           (hut::system% (format "cat ~a/hello.txt" (test-path)))
            (hut::println 'warn "Plusargs: ~a" plusargs)
            (when (or (and (= n 1) (= m 17))
                      (and (= n 3) (= m 31))

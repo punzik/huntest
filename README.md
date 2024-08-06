@@ -10,16 +10,18 @@ Run testbenches
 Options:
   -Q, --query <QUERY>  Regexp query string.
   -k, --keep           Do not delete work directory if test is pass.
+  -i, --incremental    Do not delete existing work directory in static mode
   -s, --static         Use static work dir for initial debug purposes.
                        This option also enable keep option.
   -w, --work <PATH>    Work path. Default: base path of the script.
   -c, --color          Colorize output.
-  -i, --nopar          Sequential execution.
+  -n, --nopar          Sequential execution.
   -C, --clean          Delete work folders.
   -f, --defines        Print useful Verilog defines.
   -r, --recursive      Recursive search for script files.
   -x, --regex <REGEX>  Regular expression for searching script files. Default: '\.hut$'
-  -n, --only-show      Show testbenches only.
+  -l, --list           List testbenches. Nothing is executed.
+  -a, --list-all       List testbenches. Ignore query and defer.
   -v, --verbose        Verbose output.
   -q, --quiet          Quiet output.
   -V, --version        Print version.

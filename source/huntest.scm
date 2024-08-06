@@ -13,10 +13,13 @@
  append-path
  delete-recursive
  find-files
+ project-root
  find-plusarg
  list-add-separator
  list-dir
- list-flatten
+ list-flat
+ combinations
+ transpose
  println
  sort-uniq
  string->filename
@@ -41,7 +44,7 @@
  (ice-9 atomic)
  (ice-9 regex))
 
-(define APP_VERSION          "0.1.0")
+(define APP_VERSION          "0.2.0")
 
 (define WORK_DIR_PREFIX      "")
 (define TEST_DIR_PREFIX      "")
@@ -67,10 +70,11 @@
 ;;; Fail tags list
 (define fail-tags '(fail))
 
-(define LOG_HEAD_COLOR 14)
-(define LOG_INFO_COLOR 6)
-(define LOG_SUCC_COLOR 47)
-(define LOG_FAIL_COLOR 196)
+(define LOG_HEAD_COLOR  14)
+(define LOG_DEFER_COLOR 244)
+(define LOG_INFO_COLOR  6)
+(define LOG_SUCC_COLOR  47)
+(define LOG_FAIL_COLOR  196)
 
 ;;;
 ;;; Colorize text
@@ -164,21 +168,44 @@
 ;;;
 ;;; Flatten nested lists
 ;;;
-(define (list-flatten lst)
-  (if (null? lst) '()
-      (fold-right
-       (lambda (x out)
-         (if (list? x)
-             (append (list-flatten x) out)
-             (cons x out)))
-       '() lst)))
+(define (list-flat . lst)
+  (fold-right
+   (lambda (x out)
+     (cond
+      ((null? x) out)
+      ((pair? x) (append (list-flat (car x))
+                         (list-flat (cdr x))
+                         out))
+      (else (cons x out))))
+   '() lst))
+
+;;; Transpose matrix
+;;; Example: (transpose '((1 2) (3 4) (5 6))) -> '((1 3 5) (2 4 6))
+(define (transpose l)
+  (apply map list l))
+
+;;; Make lists combinations
+;;; Example: (combinations '(1 2 3) '(a b)) -> '((1 a) (1 b) (2 a) (2 b) (3 a) (3 b))
+(define (combinations . lists)
+  (cond
+   ((null? lists) '())
+   ((null? (cdr lists)) (car lists))
+   (else
+    (fold (lambda (comb out)
+            (append out
+                    (map (lambda (x)
+                           (if (list? comb)
+                               (cons x comb)
+                               (list x comb)))
+                         (car lists))))
+          '() (apply combinations (cdr lists))))))
 
 ;;;
 ;;; Recursively append strings and list of strings
 ;;;
 (define (string-append* . strings)
   (string-concatenate
-   (list-flatten strings)))
+   (list-flat strings)))
 
 ;;;
 ;;; Recursively append strings and list of strings with separator
@@ -187,7 +214,7 @@
   (string-concatenate
    (list-add-separator
     sep
-    (list-flatten strings))))
+    (list-flat strings))))
 
 ;;;
 ;;; Random string
@@ -253,13 +280,14 @@
 ;;;
 ;;; As system% but returns values of retval and output as string
 ;;;
-(define* (system%-capture cmd #:key (base #f))
+(define* (system%-capture cmd #:key (base #f) (stderr #t))
   ;; Echo command
   (println "RUN: ~a" cmd)
   ;; Execute
   (let* ((cmd (string-append
                (if base (format "cd ~a; " base) "")
-               cmd " 2>&1"))
+               cmd
+               (if stderr " 2>&1" "")))
          (p (open-input-pipe cmd)))
     (let ((output (get-string-all p)))
       (values (close-pipe p)
@@ -381,6 +409,16 @@
         (delete-file path))))
 
 ;;;
+;;; Find project root
+;;;
+(define (project-root path)
+  (let ((path (canonicalize-path path)))
+    (if (or (string= path "/")
+            (file-exists? (string-append path "/.git")))
+        path
+        (project-root (string-append path "/..")))))
+
+;;;
 ;;; Useful print function
 ;;;
 (define (println tag . rest)
@@ -405,11 +443,23 @@
 (define* (string->filename str #:optional (max-len MAX_LEN_OF_FILENAME))
   (let ((str
          (string-downcase
-          (string-map
-           (lambda (c)
-             (if (or (char-alphabetic? c)
-                     (char-numeric? c)) c #\_))
-           str))))
+          (list->string
+           (reverse
+            (fold
+             (lambda (c s)
+               (cond
+                ((or (char-alphabetic? c)
+                     (char-numeric? c))
+                 (cons c s))
+                ((equal? c #\<) (cons* #\t #\l s))
+                ((equal? c #\>) (cons* #\t #\g s))
+                ((equal? c #\=) (cons* #\q #\e s))
+                ;; ((equal? c #\-) (cons* #\s #\u #\n #\i #\m s))
+                ;; ((equal? c #\+) (cons* #\s #\u #\l #\p s))
+                ((equal? c #\*) (cons* #\l #\u #\m s))
+                ((equal? c #\/) (cons* #\v #\i #\d s))
+                (else (cons #\_ s))))
+             '() (string->list str)))))))
     (if (> (string-length str) max-len)
         (substring str 0 max-len)
         str)))
@@ -437,9 +487,10 @@
 ;;; Test struct
 ;;;
 (define-record-type <test>
-  (test-new name func pass output path)
+  (test-new name expect-fail func pass output path)
   test?
   (name test-name test-set-name!)
+  (expect-fail test-expect-fail)
   (func test-func)
   (pass test-pass? test-pass!)
   (output test-output test-set-output!)
@@ -449,12 +500,15 @@
 ;;; Testbench struct
 ;;;
 (define-record-type <testbench>
-  (testbench-new name init finish tests
+  (testbench-new name help defer
+                 init finish tests
                  init-pass init-output
                  fini-pass fini-output
                  base-path work-path filename)
   testbench?
   (name tb-name)
+  (help tb-help)
+  (defer tb-defer tb-set-defer!)
   (init tb-init)
   (finish tb-finish)
   (tests tb-tests tb-set-tests!)
@@ -469,16 +523,18 @@
 ;;;
 ;;; Test constructor
 ;;;
-(define* (make-test #:key (name "") (body (lambda args #f)))
+(define* (make-test #:key (name "") (expect-fail #f) (body (lambda args #f)))
   (let* ((name (string-trim-both name))
          (name (if (string-null? name) UNNAMED_TEST_NAME name)))
-    (test-new name body #f '() #f)))
+    (test-new name expect-fail body #f '() #f)))
 
 ;;;
 ;;; Testbench constructor
 ;;;
 (define* (make-testbench #:key
                          (name "")
+                         (help #f)
+                         (defer #f)
                          (init (lambda args #t))
                          (finish (lambda args #t))
                          (tests '()))
@@ -493,8 +549,14 @@
          tests
          (rename-duplicates (map test-name tests) string=?))
 
-    (testbench-new name init finish tests
+    (testbench-new name help defer init finish tests
                    #f '() #f '() #f #f #f)))
+
+;;;
+;;; Undefer testbench
+;;;
+(define (tb-undefer tb)
+  (tb-set-defer! tb #f))
 
 ;;;
 ;;; Filter testbenches by regexp query
@@ -532,11 +594,24 @@
                  (let ((test-regex (make-regexp test-regex)))
                    (map
                     (lambda (tb)
-                      (tb-set-tests! tb
-                                     (filter
-                                      (lambda (test) (regexp-exec test-regex (test-name test)))
-                                      (tb-tests tb)))
-                      tb)
+                      (testbench-new (tb-name tb)
+                                     (tb-help tb)
+                                     (tb-defer tb)
+                                     (tb-init tb)
+                                     (tb-finish tb)
+
+                                     (filter (lambda (test)
+                                               (regexp-exec test-regex
+                                                            (test-name test)))
+                                             (tb-tests tb))
+
+                                     (tb-init-pass? tb)
+                                     (tb-init-output tb)
+                                     (tb-fini-pass? tb)
+                                     (tb-fini-output tb)
+                                     (tb-base-path tb)
+                                     (tb-work-path tb)
+                                     (tb-filename tb)))
                     tbs))
                  tbs)))
 
@@ -546,7 +621,7 @@
 ;;;
 ;;; Execute function with intercept of output
 ;;;
-(define (execute-phase func set-output! set-pass!)
+(define (execute-phase func set-output! set-pass! expect-fail)
   (let* ((pass #f)
          (output (string-split
                   (string-trim-both
@@ -559,24 +634,44 @@
                          (lambda () (set! pass (func)))
                          #:unwind? #t))))
                   #\newline))
-         (pass (and pass (not (tag-fail? output)))))
+         (pass (and pass
+                    ((if expect-fail values not)
+                     (tag-fail? output)))))
 
     (set-output! output)
     (set-pass! pass)
     pass))
 
 ;;;
+;;; Path wrapper
+;;;
+(define (path-wrapper path)
+  (lambda args
+    (if (null? args)
+        path
+        (apply values
+               (map
+                (lambda (arg)
+                  (let ((conv (lambda (x) (if (absolute-file-name? x)
+                                         x
+                                         (append-path path x)))))
+                    (if (list? arg)
+                        (map conv arg)
+                        (conv arg))))
+                args)))))
+;;;
 ;;; Execute test
 ;;;
 (define (test-execute! tb plusargs test)
   (execute-phase
    (lambda () ((test-func test)
-          plusargs
-          (tb-base-path tb)
-          (tb-work-path tb)
-          (test-path test)))
+               plusargs
+               (path-wrapper (tb-base-path tb))
+               (path-wrapper (tb-work-path tb))
+               (path-wrapper (test-path test))))
    (lambda (o) (test-set-output! test o))
-   (lambda (p) (test-pass! test p))))
+   (lambda (p) (test-pass! test p))
+   (test-expect-fail test)))
 
 ;;;
 ;;; Execute testbench init
@@ -584,11 +679,12 @@
 (define* (tb-init-execute! tb plusargs)
   (execute-phase
    (lambda () ((tb-init tb)
-          plusargs
-          (tb-base-path tb)
-          (tb-work-path tb)))
+               plusargs
+               (path-wrapper (tb-base-path tb))
+               (path-wrapper (tb-work-path tb))))
    (lambda (o) (tb-init-set-output! tb o))
-   (lambda (p) (tb-init-pass! tb p))))
+   (lambda (p) (tb-init-pass! tb p))
+   #f))
 
 ;;;
 ;;; Execute testbench destructor
@@ -596,11 +692,12 @@
 (define* (tb-fini-execute! tb plusargs)
   (execute-phase
    (lambda () ((tb-finish tb)
-          plusargs
-          (tb-base-path tb)
-          (tb-work-path tb)))
+               plusargs
+               (path-wrapper (tb-base-path tb))
+               (path-wrapper (tb-work-path tb))))
    (lambda (o) (tb-fini-set-output! tb o))
-   (lambda (p) (tb-fini-pass! tb p))))
+   (lambda (p) (tb-fini-pass! tb p))
+   #f))
 
 ;;;
 ;;; Format testbench output log
@@ -676,7 +773,13 @@
 ;;;
 (define (tb-print-only tb colorize?)
   (let ((string-colorize (if colorize? string-colorize (lambda (s c) s))))
-    (display (string-colorize (format "TESTBENCH ~a : ~a\n"
+    (if colorize?
+        (display (string-colorize "TESTBENCH"
+                                  (if (tb-defer tb)
+                                      LOG_DEFER_COLOR
+                                      LOG_HEAD_COLOR)))
+        (display (format "~aTESTBENCH" (if (tb-defer tb) "-" ""))))
+    (display (string-colorize (format " ~a : ~a\n"
                                       (tb-name tb)
                                       (append-path
                                        (tb-base-path tb)
@@ -688,7 +791,20 @@
                                          (tb-name tb)
                                          (test-name test))
                                  LOG_INFO_COLOR)))
-     (tb-tests tb))))
+     (tb-tests tb))
+
+    (let ((help (tb-help tb)))
+      (when help
+        (display "   Help:\n")
+        (for-each
+         (lambda (l) (display (format "     ~a\n" l)))
+         (string-split
+          (string-trim-both
+           (if (list? help)
+               (string-join help "\n")
+               help)
+           #\newline)
+          #\newline))))))
 
 ;;;
 ;;; Clear testbench output dir
@@ -709,29 +825,42 @@
 ;;; Print pass/fail statistics
 ;;;
 (define (print-summary testbenches colorize?)
-  (let ((colorize (if colorize? string-colorize (lambda (s c) s)))
-        (tb-count (length testbenches))
-        (test-count (apply
+  (let* ((colorize (if colorize? string-colorize (lambda (s c) s)))
+         (tb-count (length testbenches))
+         (test-count (apply
+                      +
+                      (map (lambda (tb) (length (tb-tests tb))) testbenches)))
+         (tb-succ (length
+                   (filter
+                    (lambda (tb)
+                      (and (tb-init-pass? tb)
+                           (tb-fini-pass? tb)
+                           (every test-pass? (tb-tests tb))))
+                    testbenches)))
+         (test-succ (apply
                      +
-                     (map (lambda (tb) (length (tb-tests tb))) testbenches)))
-        (tb-succ (length
-                  (filter
-                   (lambda (tb)
-                     (and (tb-init-pass? tb)
-                          (tb-fini-pass? tb)
-                          (every test-pass? (tb-tests tb))))
-                   testbenches)))
-        (test-succ (apply
-                    +
-                    (map (lambda (tb) (length (filter test-pass? (tb-tests tb))))
-                         testbenches))))
+                     (map (lambda (tb) (length (filter test-pass? (tb-tests tb))))
+                          testbenches)))
+         (tb-fail (- tb-count tb-succ))
+         (test-fail (- test-count test-succ)))
 
     (display (colorize (format "## ALL  ~a (~a)\n" tb-count test-count) LOG_HEAD_COLOR))
     (display (colorize (format "## PASS ~a (~a)\n" tb-succ test-succ) LOG_SUCC_COLOR))
-    (display (colorize (format "## FAIL ~a (~a)\n"
-                               (- tb-count tb-succ)
-                               (- test-count test-succ))
-                       LOG_FAIL_COLOR))))
+    (display (colorize (format "## FAIL ~a (~a)\n" tb-fail test-fail) LOG_FAIL_COLOR))
+
+    (when (not (zero? tb-fail))
+      (newline)
+      (display (colorize "## List of failed testbenches\n" LOG_FAIL_COLOR))
+      (for-each
+       (lambda (tb) (display (colorize (format "  ~a: ~a\n"
+                                          (tb-base-path tb)
+                                          (tb-filename tb))
+                                  LOG_FAIL_COLOR)))
+       (filter (lambda (tb)
+                 (not (and (tb-init-pass? tb)
+                           (tb-fini-pass? tb)
+                           (every test-pass? (tb-tests tb)))))
+               testbenches)))))
 
 ;;;
 ;;; Make dir reqursive
@@ -754,8 +883,9 @@
                            #:key
                            (plusargs       '())
                            (base-path      #f)
-                           (verbosity      #f)
+                           (verbosity      'default)
                            (keep-output?   #f)
+                           (keep-tb-path?  #f)
                            (colorize?      #f)
                            (static-output? #f)
                            (parallel?      #f))
@@ -765,35 +895,38 @@
     (let ((base-path (or base-path (tb-base-path tb)))
           (script-name (tb-filename tb)))
       (mkdir-rec base-path)
-
-      (if static-output?
-          ;; static work path
-          (let ((work-path
-                 (append-path base-path
-                              (format "~a~a-~a" WORK_DIR_PREFIX
-                                      script-name (string->filename (tb-name tb))))))
-            (when (file-exists? work-path)
-              (delete-recursive work-path))
-            (mkdir work-path)
-            work-path)
-          ;; dynamic work path
-          (mkdtemp
-           (append-path base-path
-                        (format "~a~a-~a-~a-XXXXXX"
-                                WORK_DIR_PREFIX
-                                script-name
-                                (string->filename (tb-name tb))
-                                (current-time)))))))
+      (let ((base-path (canonicalize-path base-path)))
+        (if static-output?
+            ;; static work path
+            (let ((tb-path
+                   (append-path base-path
+                                (format "~a~a-~a" WORK_DIR_PREFIX
+                                        script-name (string->filename (tb-name tb))))))
+              (when (and (file-exists? tb-path)
+                         (not keep-tb-path?))
+                (delete-recursive tb-path))
+              (when (not (file-exists? tb-path))
+                (mkdir tb-path))
+              tb-path)
+            ;; dynamic work path
+            (mkdtemp
+             (append-path base-path
+                          (format "~a~a-~a-~a-XXXXXX"
+                                  WORK_DIR_PREFIX
+                                  script-name
+                                  (string->filename (tb-name tb))
+                                  (current-time))))))))
 
   ;; Make test directory
-  (define (prepare-test-path test work-path)
+  (define (prepare-test-path test tb-path)
     (let ((test-path
-           (append-path work-path
+           (append-path tb-path
                         (format "~a~a" TEST_DIR_PREFIX
                                 (string->filename (test-name test))))))
       (if (file-exists? test-path)
-          (raise-exception
-           (format "Fatal error: test path exists: '~a'\n" test-path))
+          (when (not keep-tb-path?)
+            (raise-exception
+             (format "Fatal error: test path exists: '~a'\n" test-path)))
           (mkdir test-path))
       ;; (canonicalize-path)
       test-path))
@@ -1020,7 +1153,7 @@
 ;;; Print log level verilog defines
 ;;;
 (define (print-verilog-defines)
-  (define (* . fmt) (apply println fmt))
+  (define * println)
   (let ((tags
          (map (lambda (tag)
                 (cons
@@ -1066,24 +1199,26 @@
 ;;; Print help
 ;;;
 (define (print-help app-name)
-  (define (* . fmt) (apply println fmt))
+  (define * println)
   (* "Usage: ~a [OPTION]... [PLUSARGS]" app-name)
   (* "Run testbenches")
   (* "")
   (* "Options:")
-  (* "  -Q, --query <QUERY>  Regexp query string.")
+  (* "  -Q, --query <QUERY>  Regexp query string (multiple allowed).")
   (* "  -k, --keep           Do not delete work directory if test is pass.")
+  (* "  -i, --incremental    Do not delete existing work directory in static mode")
   (* "  -s, --static         Use static work dir for initial debug purposes.")
   (* "                       This option also enable keep option.")
   (* "  -w, --work <PATH>    Work path. Default: base path of the script.")
   (* "  -c, --color          Colorize output.")
-  (* "  -i, --nopar          Sequential execution.")
+  (* "  -n, --nopar          Sequential execution.")
   (* "  -C, --clean          Delete work folders.")
   (* "  -f, --defines        Print useful Verilog defines.")
   (when (not (%run-standalone%))
     (* "  -r, --recursive      Recursive search for script files.")
     (* "  -x, --regex <REGEX>  Regular expression for searching script files. Default: '~a'" TEST_SCRIPT_REGEX))
-  (* "  -l, --list           List testbenches.")
+  (* "  -l, --list           List testbenches. Nothing is executed.")
+  (* "  -a, --list-all       List testbenches. Ignore query and defer.")
   (* "  -v, --verbose        Verbose output.")
   (* "  -q, --quiet          Quiet output.")
   (* "  -V, --version        Print version.")
@@ -1118,16 +1253,18 @@
               '()
               '(((recursive #\r) none)
                 ((regex #\x) required)))
-          '(((query #\Q) required)
+          '(((query #\Q) multiple)
             ((verbose #\v) none)
             ((quiet #\q) none)
             ((keep #\k) none)
+            ((incremental #\i) none)
             ((color #\c) none)
             ((static #\s) none)
             ((work #\w) required)
-            ((nopar #\i) none)
+            ((nopar #\n) none)
             ((clean #\C) none)
             ((list #\l) none)
+            ((list-all #\a) none)
             ((defines #\f) none)
             ((version #\V) none)
             ((help #\h) none)))))
@@ -1166,49 +1303,68 @@
           (cut opt-get opts <>)))))))
 
 ;;;
-;;; Run testbench
+;;; Run testbenches with command line arguments
+;;;
+(define (run-with-opts testbenches opt)
+  (if (opt 'list-all)
+      ;; list all testbenches
+      (for-each (cut tb-print-only <> (opt 'color)) testbenches)
+
+      ;; filter and process testbenches
+      (let ((testbenches
+             (if (opt 'query)
+                 (apply lset-union
+                        (cons eq?
+                              (map (cut filter-testbenches testbenches <>)
+                                   (opt 'query))))
+                 (filter
+                  (lambda (tb) (not (tb-defer tb)))
+                  testbenches))))
+
+        (for-each tb-undefer testbenches)
+
+        (cond
+         ;; list testbenches
+         ((opt 'list)
+          (for-each
+           (cut tb-print-only <> (opt 'color))
+           testbenches))
+
+         ;; clean outputs
+         ((opt 'clean)
+          (force-delete-outputs testbenches (opt 'work)))
+
+         ;; run testbenches
+         (else
+          (run-testbenches! testbenches
+                            #:base-path      (opt 'work)
+                            #:plusargs       (opt 'plusargs)
+                            #:verbosity      (cond
+                                              ((opt 'verbose) 'verbose)
+                                              ((opt 'quiet) 'quiet)
+                                              (else 'default))
+                            #:keep-output?   (or (opt 'keep) (opt 'static))
+                            #:keep-tb-path?  (and (opt 'static) (opt 'incremental))
+                            #:colorize?      (opt 'color)
+                            #:static-output? (opt 'static)
+                            #:parallel?      (opt 'parallel))
+          (when (not (testbenches-pass? testbenches))
+            (exit -1))))
+
+        (exit 0))))
+
+;;;
+;;; Run testbench from script
 ;;;
 (define* (run . testbenches)
-  (let ((testbenches (list-flatten testbenches)))
+  (let ((testbenches (list-flat testbenches)))
     (if (%run-standalone%)
         ;; For standalone run
         (let* ((cmdl (command-line))
-               (opt (app-options cmdl))
-               (testbenches
-                (if (opt 'query)
-                    (filter-testbenches testbenches (opt 'query))
-                    testbenches)))
+               (opt (app-options cmdl)))
 
           (testbenches-link-to-file! testbenches (car cmdl))
-
-          (cond
-           ;; dry run
-           ((opt 'list)
-            (for-each
-             (cut tb-print-only <> (opt 'color))
-             testbenches))
-
-           ;; clean outputs
-           ((opt 'clean)
-            (force-delete-outputs testbenches (opt 'work)))
-
-           ;; run testbenches
-           (else
-            (run-testbenches! testbenches
-                              #:base-path      (opt 'work)
-                              #:plusargs       (opt 'plusargs)
-                              #:verbosity      (cond
-                                                ((opt 'verbose) 'verbose)
-                                                ((opt 'quiet) 'quiet)
-                                                (else #f))
-                              #:keep-output?   (or (opt 'keep) (opt 'static))
-                              #:colorize?      (opt 'color)
-                              #:static-output? (opt 'static)
-                              #:parallel?      (opt 'parallel))
-            (when (not (testbenches-pass? testbenches))
-              (exit -1))))
-
-          (exit 0))
+          (run-with-opts testbenches opt))
 
         ;; For run from upper level code
         testbenches)))
@@ -1225,7 +1381,7 @@
            (eprintln "~a\n" e)
            tbs)
        (lambda ()
-         (let ((t (list-flatten (load file))))
+         (let ((t (list-flat (load file))))
            (if (or (testbench? t)
                    (and (list? t)
                         (every testbench? t)))
@@ -1274,36 +1430,4 @@
                        '() (opt 'rest))))
              string<)))
 
-      (let ((testbenches
-             ((if (opt 'query)
-                  (cut filter-testbenches <> (opt 'query))
-                  (lambda (x) x))
-              (load-testbenches files))))
-        (cond
-         ;; dry run
-         ((opt 'list)
-          (for-each
-           (cut tb-print-only <> (opt 'color))
-           testbenches))
-
-         ;; clean outputs
-         ((opt 'clean)
-          (force-delete-outputs testbenches (opt 'work)))
-
-         ;; run testbenches
-         (else
-          (run-testbenches! testbenches
-                            #:base-path      (opt 'work)
-                            #:plusargs       (opt 'plusargs)
-                            #:verbosity      (cond
-                                              ((opt 'verbose) 'verbose)
-                                              ((opt 'quiet) 'quiet)
-                                              (else #f))
-                            #:keep-output?   (or (opt 'keep) (opt 'static))
-                            #:colorize?      (opt 'color)
-                            #:static-output? (opt 'static)
-                            #:parallel?      (opt 'parallel))
-          (when (not (testbenches-pass? testbenches))
-            (exit -1))))
-
-        (exit 0)))))
+      (run-with-opts (load-testbenches files) opt))))
