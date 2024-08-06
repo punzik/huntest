@@ -859,10 +859,14 @@
       (newline)
       (display (colorize "## List of failed testbenches\n" LOG_FAIL_COLOR))
       (for-each
-       (lambda (tb) (display (colorize (format "  ~a: ~a\n"
-                                          (tb-base-path tb)
-                                          (tb-filename tb))
-                                  LOG_FAIL_COLOR)))
+       (lambda (tb)
+         (display (colorize (format "  ~a: ~a\n"
+                                    (tb-base-path tb)
+                                    (tb-filename tb))
+                            LOG_FAIL_COLOR))
+         (for-each
+          (lambda (test) (display (colorize (format "    ~a\n" (test-name test)) LOG_FAIL_COLOR)))
+          (filter (compose not test-pass?) (tb-tests tb))))
        (filter (lambda (tb)
                  (not (and (tb-init-pass? tb)
                            (tb-fini-pass? tb)
