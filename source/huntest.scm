@@ -889,27 +889,27 @@
     (let ((base-path (or base-path (tb-base-path tb)))
           (script-name (tb-filename tb)))
       (mkdir-rec base-path)
-
-      (if static-output?
-          ;; static work path
-          (let ((tb-path
-                 (append-path base-path
-                              (format "~a~a-~a" WORK_DIR_PREFIX
-                                      script-name (string->filename (tb-name tb))))))
-            (when (and (file-exists? tb-path)
-                       (not keep-tb-path?))
-              (delete-recursive tb-path))
-            (when (not (file-exists? tb-path))
-              (mkdir tb-path))
-            tb-path)
-          ;; dynamic work path
-          (mkdtemp
-           (append-path base-path
-                        (format "~a~a-~a-~a-XXXXXX"
-                                WORK_DIR_PREFIX
-                                script-name
-                                (string->filename (tb-name tb))
-                                (current-time)))))))
+      (let ((base-path (canonicalize-path base-path)))
+        (if static-output?
+            ;; static work path
+            (let ((tb-path
+                   (append-path base-path
+                                (format "~a~a-~a" WORK_DIR_PREFIX
+                                        script-name (string->filename (tb-name tb))))))
+              (when (and (file-exists? tb-path)
+                         (not keep-tb-path?))
+                (delete-recursive tb-path))
+              (when (not (file-exists? tb-path))
+                (mkdir tb-path))
+              tb-path)
+            ;; dynamic work path
+            (mkdtemp
+             (append-path base-path
+                          (format "~a~a-~a-~a-XXXXXX"
+                                  WORK_DIR_PREFIX
+                                  script-name
+                                  (string->filename (tb-name tb))
+                                  (current-time))))))))
 
   ;; Make test directory
   (define (prepare-test-path test tb-path)
