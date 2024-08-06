@@ -20,6 +20,7 @@
  list-flat
  combinations
  transpose
+ map-combinations
  println
  sort-uniq
  string->filename
@@ -199,6 +200,12 @@
                                (list x comb)))
                          (car lists))))
           '() (apply combinations (cdr lists))))))
+
+;;;
+;;; Map combinations
+;;;
+(define (map-combinations f . variables)
+  (apply map (cons f (transpose (apply combinations variables)))))
 
 ;;;
 ;;; Recursively append strings and list of strings
