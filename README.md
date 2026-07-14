@@ -53,8 +53,9 @@ Icarus module parameters
 ------------------------
 
 `iverilog::test-body-simple` passes `#:parameters` to Icarus as root-module
-`-P` overrides. Values are Verilog expressions; Huntest handles shell quoting.
-Do not manually escape a single quote in a numeric HDL literal:
+`-P` overrides. Values are Verilog expressions and are passed as separate
+process arguments, not parsed by a shell. Do not manually escape a single
+quote in a numeric HDL literal:
 
 ```scheme
 #:parameters '(("VALUE" "8'h12"))
@@ -64,6 +65,17 @@ For a Verilog string literal, include its double quotes in the Scheme string:
 
 ```scheme
 #:parameters '(("MESSAGE" "\"hello world\""))
+```
+
+Every entry in `#:compile-flags`, `#:runtime-flags`, `#:include-paths`,
+`#:defines`, `#:parameters`, and `#:sources` is one Icarus process argument.
+Do not combine multiple shell arguments in one string.
+
+By default, Icarus and VVP warnings do not fail a test. Enable strict warning
+handling to fail the test when captured output contains `warning:`:
+
+```scheme
+#:fail-on-warnings? #t
 ```
 
 ```

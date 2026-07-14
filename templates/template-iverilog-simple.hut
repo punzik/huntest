@@ -21,5 +21,6 @@
     #:include-paths '()
     #:defines '()
     #:parameters '()
+    #:fail-on-warnings? #f
     #:init (lambda (plusargs base-path tb-path test-path) #t)
     #:finish (lambda (plusargs base-path tb-path test-path) #t)))))

@@ -27,7 +27,8 @@
  string-append*
  string-append-sep*
  system%
- system%-capture)
+ system%-capture
+ system%-capture-argv)
 
 (import
  (srfi srfi-1)                          ; Lists
@@ -322,6 +323,32 @@
                 (system%-capture cmd #:base base)))
     (display output)
     retval))
+
+;;;
+;;; Execute a program with argv, without interpreting its arguments as shell code.
+;;; A static shell trampoline supplies an isolated working directory and combines
+;;; stderr with stdout; command, args, and base are passed as positional arguments.
+;;;
+(define* (system%-capture-argv command args #:key (base #f))
+  (when (not (and (string? command)
+                  (every string? args)
+                  (or (not base) (string? base))))
+    (raise-exception "system%-capture-argv expects string command, arguments, and base path"))
+
+  ;; Echo command for diagnostics only.  Execution below never parses this string.
+  (println "RUN: ~a" (string-append-sep* " " command args))
+
+  (let* ((runner (if base
+                     "cd \"$1\" || exit 127; shift; exec \"$@\" 2>&1"
+                     "exec \"$@\" 2>&1"))
+         (runner-args (append (list "r" "/bin/sh" "-c" runner "huntest-argv")
+                              (if base
+                                  (cons base (cons command args))
+                                  (cons command args))))
+         (p (apply open-pipe* runner-args)))
+    (let ((output (get-string-all p)))
+      (values (close-pipe p)
+              output))))
 
 ;;;
 ;;; Futures with completed flag

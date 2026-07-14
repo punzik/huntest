@@ -18,12 +18,23 @@
  (ice-9 string-fun))
 
 ;;;
-;;; Quote one argument for the shell used by hut::system%.
+;;; Format a string as a Verilog string literal for a -D value.
 ;;;
-(define (shell-quote arg)
-  (string-append "'"
-                 (string-replace-substring arg "'" "'\"'\"'")
-                 "'"))
+(define (verilog-string-literal str)
+  (string-append
+   "\""
+   (string-replace-substring
+    (string-replace-substring str "\\" "\\\\")
+    "\"" "\\\"")
+   "\""))
+
+;;;
+;;; Icarus diagnostics use "warning:" for compiler and runtime warnings.
+;;;
+(define (warning-output? output)
+  (any (lambda (line)
+         (string-contains (string-downcase line) "warning:"))
+       (string-split output #\newline)))
 
 ;;;
 ;;; Simple iverilog testbench test body function
@@ -37,7 +48,8 @@
                            (parameters '())
                            (defines '())
                            (init (lambda args #t))
-                           (finish (lambda args #t)))
+                           (finish (lambda args #t))
+                           (fail-on-warnings? #f))
   (lambda (plusargs base-path tb-path test-path)
     (let ((vvp-file (string-append top ".vvp"))
           (includes
@@ -45,23 +57,38 @@
                 (cons (base-path)
                       (map base-path include-paths))))
           (defines
-            (map (cut string-append "-D" <>)
-                 (cons*
-                  (string-append "HUNTEST_BASE_DIR='\"" (base-path) "\"'")
-                  (string-append "HUNTEST_TB_DIR='\"" (tb-path) "\"'")
-                  "HUNTEST_TESTBENCH"
-                  (map
-                   (lambda (def)
-                     (if (list? def)
-                         (format "~a=~a" (car def) (cadr def))
-                         def))
-                   defines))))
+           (map (cut string-append "-D" <>)
+                (cons*
+                 (string-append "HUNTEST_BASE_DIR="
+                                (verilog-string-literal (base-path)))
+                 (string-append "HUNTEST_TB_DIR="
+                                (verilog-string-literal (tb-path)))
+                 "HUNTEST_TESTBENCH"
+                 (map
+                  (lambda (def)
+                    (if (list? def)
+                        (format "~a=~a" (car def) (cadr def))
+                        def))
+                  defines))))
           (parameters
-           ;; (map (cut string-append (format "-P~a." top) <>) parameters)
            (map (lambda (p)
-                  (shell-quote
-                   (format "-P~a.~a=~a" top (first p) (second p))))
-                parameters)))
+                  (format "-P~a.~a=~a" top (first p) (second p)))
+                parameters))
+          (sources
+           (base-path (if (procedure? sources)
+                          (sources plusargs base-path tb-path test-path)
+                          sources))))
+
+      (define (run-command command args)
+        (let-values (((retval output)
+                      (system%-capture-argv command args #:base (test-path))))
+          (let ((warning? (warning-output? output)))
+            (display output)
+            (when (and fail-on-warnings? warning?)
+              (println 'fail "Icarus warning treated as failure"))
+            (and (zero? retval)
+                 (or (not fail-on-warnings?)
+                     (not warning?))))))
 
       (let-values (((ext-flags reg-flags)
                     (partition
@@ -72,25 +99,13 @@
 
         (and (init plusargs base-path tb-path test-path)
              (let ((retval
-                    (and (zero?
-                          (system% (string-append-sep*
-                                    " "
-                                    "iverilog" "-o" vvp-file
-                                    "-s" top
-                                    compile-flags parameters defines includes
-                                    (base-path (if (procedure? sources)
-                                                   (sources plusargs base-path tb-path test-path)
-                                                   sources)))
-                                   #:base (test-path)))
-                         (zero?
-                          (system% (string-append-sep*
-                                    " "
-                                    "vvp"
-                                    reg-flags
-                                    (test-path vvp-file)
-                                    ext-flags
-                                    plusargs)
-                                   #:base (test-path))))))
-
+                    (and
+                     (run-command "iverilog"
+                                  (append (list "-o" vvp-file "-s" top)
+                                          compile-flags parameters defines includes sources))
+                     (run-command "vvp"
+                                  (append reg-flags
+                                          (list (test-path vvp-file))
+                                          ext-flags plusargs)))))
                (and (finish plusargs base-path tb-path test-path)
                     retval)))))))
