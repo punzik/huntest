@@ -3,6 +3,27 @@ Huntest - HDL Testbench Launcher
 
 Work in progress.
 
+Running with Nix
+----------------
+
+Run Huntest directly from GitHub (with Nix flakes enabled):
+
+```console
+nix run github:punzik/huntest
+```
+
+Arguments can be passed after `--`, for example:
+
+```console
+nix run github:punzik/huntest -- --help
+```
+
+To enter a development shell with Huntest and Guile:
+
+```console
+nix develop github:punzik/huntest
+```
+
 ```
 Usage: huntest [OPTION]... [PLUSARGS]
 Run testbenches
