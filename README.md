@@ -106,6 +106,22 @@ A plusarg starts with `+` and is passed to the selected test body.  For
 example, `+dump` can enable waveform dumping and `+seed=17` can select a
 random seed.
 
+### Color scheme
+
+Colors are emitted only with `-c` / `--color`.  In auto mode, Huntest reads
+the final numeric background field of the commonly exported `COLORFGBG`
+variable.  A light background selects darker, high-contrast colors; a dark
+background retains the bright palette.  When the terminal does not expose
+`COLORFGBG`, the dark palette is the safe fallback.
+
+Override auto-detection when necessary:
+
+```console
+HUNTEST_COLOR_SCHEME=light huntest -c -r tests
+HUNTEST_COLOR_SCHEME=dark  huntest -c -r tests
+HUNTEST_COLOR_SCHEME=auto  huntest -c -r tests
+```
+
 ### Queries
 
 A query has the form:

@@ -65,24 +65,97 @@
     (success . "SUCCESS#")
     (fail    . "FAIL#")))
 
+;;;
+;;; Terminal color scheme
+;;;
+;;; COLORFGBG is exported by many terminal emulators as foreground;...;background.
+;;; HUNTEST_COLOR_SCHEME=light|dark overrides auto-detection.  There is no
+;;; portable terminal API for the default background, so auto mode preserves
+;;; the dark palette when COLORFGBG is absent or cannot be interpreted.
+;;;
+(define ansi16-rgb
+  '#((0 0 0)       (205 0 0)     (0 205 0)     (205 205 0)
+     (0 0 238)     (205 0 205)   (0 205 205)   (229 229 229)
+     (127 127 127) (255 0 0)     (0 255 0)     (255 255 0)
+     (92 92 255)   (255 0 255)   (0 255 255)   (255 255 255)))
+
+(define (xterm-color-rgb color)
+  (cond
+   ((and (>= color 0) (< color 16))
+    (vector-ref ansi16-rgb color))
+   ((and (>= color 16) (< color 232))
+    (let* ((index (- color 16))
+           (levels '#(0 95 135 175 215 255)))
+      (list (vector-ref levels (quotient index 36))
+            (vector-ref levels (quotient (modulo index 36) 6))
+            (vector-ref levels (modulo index 6)))))
+   ((and (>= color 232) (< color 256))
+    (let ((level (+ 8 (* 10 (- color 232)))))
+      (list level level level)))
+   (else #f)))
+
+(define (rgb-light? rgb)
+  (> (+ (* 0.2126 (first rgb))
+        (* 0.7152 (second rgb))
+        (* 0.0722 (third rgb)))
+     127.5))
+
+(define (colorfgbg-scheme)
+  (let ((value (getenv "COLORFGBG")))
+    (and value
+         (let* ((parts (string-split value #\;))
+                (background (and (pair? parts) (car (reverse parts))))
+                (color (and background (string->number background)))
+                (rgb (and (integer? color) (xterm-color-rgb color))))
+           (and rgb (if (rgb-light? rgb) 'light 'dark))))))
+
+(define (color-scheme-override)
+  (let ((value (getenv "HUNTEST_COLOR_SCHEME")))
+    (and value
+         (let ((value (string-downcase (string-trim-both value))))
+           (cond
+            ((string=? value "light") 'light)
+            ((string=? value "dark") 'dark)
+            (else #f))))))
+
+(define COLOR_SCHEME
+  (or (color-scheme-override)
+      (colorfgbg-scheme)
+      'dark))
+
+(define (color-palette scheme)
+  (if (eq? scheme 'light)
+      ;; Dark, high-contrast xterm colors for light terminal backgrounds.
+      '((head . 24) (defer . 240) (info . 24) (success . 28)
+        (warning . 130) (fail . 124) (plain . 240))
+      ;; Existing bright palette for dark terminal backgrounds.
+      '((head . 14) (defer . 244) (info . 6) (success . 47)
+        (warning . 226) (fail . 196) (plain . 244))))
+
+(define COLOR_PALETTE (color-palette COLOR_SCHEME))
+
+(define (palette-color name)
+  (cdr (assq name COLOR_PALETTE)))
+
+(define LOG_HEAD_COLOR    (palette-color 'head))
+(define LOG_DEFER_COLOR   (palette-color 'defer))
+(define LOG_INFO_COLOR    (palette-color 'info))
+(define LOG_SUCC_COLOR    (palette-color 'success))
+(define LOG_UNKNOWN_COLOR (palette-color 'warning))
+(define LOG_FAIL_COLOR    (palette-color 'fail))
+(define LOG_PLAIN_COLOR   (palette-color 'plain))
+
 ;;; '(tag-symbol color-code prefix)
 (define output-tag-format
-  '((info    15  "   | ")
-    (warn    226 "   + ")
-    (success 47  "   * ")
-    (fail    196 "   ! ")
-    (#f     244 "   : ")))
+  `((info    ,LOG_INFO_COLOR    "   | ")
+    (warn    ,LOG_UNKNOWN_COLOR "   + ")
+    (success ,LOG_SUCC_COLOR    "   * ")
+    (fail    ,LOG_FAIL_COLOR    "   ! ")
+    (#f      ,LOG_PLAIN_COLOR   "   : ")))
 
 ;;; Fail and success tags lists
 (define fail-tags '(fail))
 (define success-tags '(success))
-
-(define LOG_HEAD_COLOR    14)
-(define LOG_DEFER_COLOR   244)
-(define LOG_INFO_COLOR    6)
-(define LOG_SUCC_COLOR    47)
-(define LOG_UNKNOWN_COLOR 226)
-(define LOG_FAIL_COLOR    196)
 
 ;;;
 ;;; Colorize text
