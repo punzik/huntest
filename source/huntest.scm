@@ -48,7 +48,7 @@
  (ice-9 atomic)
  (ice-9 regex))
 
-(define APP_VERSION          "0.2.0")
+(define APP_VERSION          "0.3.0")
 
 (define WORK_DIR_PREFIX      "")
 (define TEST_DIR_PREFIX      "")

@@ -14,7 +14,7 @@
       mkHuntest = pkgs:
         pkgs.stdenv.mkDerivation rec {
           pname = "huntest";
-          version = "0.2.0";
+          version = "0.3.0";
 
           src = pkgs.lib.fileset.toSource {
             root = ./.;
