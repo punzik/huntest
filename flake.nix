@@ -40,6 +40,7 @@
             install -Dm755 huntest "$out/bin/huntest"
             install -Dm644 source/huntest.scm "$out/${pkgs.guile.siteDir}/huntest.scm"
             install -Dm644 source/huntest/iverilog.scm "$out/${pkgs.guile.siteDir}/huntest/iverilog.scm"
+            install -Dm644 source/huntest/verilator.scm "$out/${pkgs.guile.siteDir}/huntest/verilator.scm"
             install -Dm644 source/huntest/sby.scm "$out/${pkgs.guile.siteDir}/huntest/sby.scm"
 
             sed -i '5,7d' "$out/bin/huntest"
@@ -57,6 +58,9 @@
             guild compile -L "$out/${pkgs.guile.siteDir}" \
               -o "$out/${pkgs.guile.siteCcacheDir}/huntest/iverilog.go" \
               "$out/${pkgs.guile.siteDir}/huntest/iverilog.scm"
+            guild compile -L "$out/${pkgs.guile.siteDir}" \
+              -o "$out/${pkgs.guile.siteCcacheDir}/huntest/verilator.go" \
+              "$out/${pkgs.guile.siteDir}/huntest/verilator.scm"
             guild compile -L "$out/${pkgs.guile.siteDir}" \
               -o "$out/${pkgs.guile.siteCcacheDir}/huntest/sby.go" \
               "$out/${pkgs.guile.siteDir}/huntest/sby.scm"
@@ -105,6 +109,16 @@
             ];
 
             # Allow .hut scripts to import the packaged Huntest modules.
+            GUILE_LOAD_PATH = "${huntest}/${pkgs.guile.siteDir}";
+          };
+
+          verilator = pkgs.mkShell {
+            packages = [
+              huntest
+              pkgs.guile
+              pkgs.verilator
+            ];
+
             GUILE_LOAD_PATH = "${huntest}/${pkgs.guile.siteDir}";
           };
         });

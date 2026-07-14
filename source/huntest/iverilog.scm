@@ -14,19 +14,7 @@
  (srfi srfi-26)                         ; Currying with cut
  (srfi srfi-28)                         ; Simple format
  (srfi srfi-37)                         ; args-fold
- (srfi srfi-39)                         ; Parameters
- (ice-9 string-fun))
-
-;;;
-;;; Format a string as a Verilog string literal for a -D value.
-;;;
-(define (verilog-string-literal str)
-  (string-append
-   "\""
-   (string-replace-substring
-    (string-replace-substring str "\\" "\\\\")
-    "\"" "\\\"")
-   "\""))
+ (srfi srfi-39))                        ; Parameters
 
 ;;;
 ;;; Icarus diagnostics use "warning:" for compiler and runtime warnings.

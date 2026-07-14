@@ -1,0 +1,28 @@
+#!/usr/bin/env -S guile
+# -*- scheme -*- !#
+
+;; (add-to-load-path "/<huntest>/source")
+(import (prefix (huntest) hut::)
+        (prefix (huntest verilator) verilator::))
+
+(hut::run
+ (hut::make-testbench
+  #:name "testbench name"
+  #:tests
+  (hut::make-test
+   #:name "test name"
+   #:body
+   (verilator::test-body-simple
+    #:sources '("template-verilator-simple-tb.sv")
+    #:top "testbench"
+    ;; optional arguments
+    #:compile-flags '()         ; e.g. "--trace-fst"
+    #:runtime-flags '()
+    #:include-paths '()
+    #:defines '()
+    #:parameters '()
+    #:timing? #t
+    #:build-jobs 1
+    #:fail-on-warnings? #f
+    #:init (lambda (plusargs base-path tb-path test-path) #t)
+    #:finish (lambda (plusargs base-path tb-path test-path) #t)))))

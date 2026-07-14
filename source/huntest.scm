@@ -26,6 +26,7 @@
  string->filename
  string-append*
  string-append-sep*
+ verilog-string-literal
  system%
  system%-capture
  system%-capture-argv)
@@ -40,6 +41,7 @@
  (srfi srfi-37)                         ; args-fold
  (srfi srfi-39)                         ; Parameters
  (ice-9 popen)
+ (ice-9 string-fun)
  (ice-9 textual-ports)
  (ice-9 threads)
  (ice-9 futures)
@@ -237,6 +239,17 @@
    (list-add-separator
     sep
     (list-flat strings))))
+
+;;;
+;;; Format a string as a Verilog string literal for a -D value.
+;;;
+(define (verilog-string-literal str)
+  (string-append
+   "\""
+   (string-replace-substring
+    (string-replace-substring str "\\" "\\\\")
+    "\"" "\\\"")
+   "\""))
 
 ;;;
 ;;; Random string

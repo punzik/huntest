@@ -78,6 +78,34 @@ handling to fail the test when captured output contains `warning:`:
 #:fail-on-warnings? #t
 ```
 
+Verilator
+---------
+
+The `(huntest verilator)` module provides `verilator::test-body-simple` for
+self-contained SystemVerilog testbenches. It builds each test with `--binary`
+in a private `obj_dir`, then runs the resulting `simulation` executable. The
+builder enables `--timing` by default and passes parameters as `-GNAME=value`.
+
+```scheme
+(import (prefix (huntest verilator) verilator::))
+
+(verilator::test-body-simple
+ #:sources '("rtl/alu.sv" "tb/alu_tb.sv")
+ #:top "alu_tb"
+ #:timing? #t
+ #:build-jobs 1
+ #:fail-on-warnings? #t)
+```
+
+`#:build-jobs` defaults to `1`, avoiding CPU oversubscription when Huntest
+runs multiple testbenches in parallel. Verilator warnings use `%Warning-...`;
+with `#:fail-on-warnings? #t`, those and `warning:` diagnostics fail the test.
+Use the development environment with Verilator installed:
+
+```console
+nix develop github:punzik/huntest#verilator
+```
+
 ```
 Usage: huntest [OPTION]... [PLUSARGS]
 Run testbenches

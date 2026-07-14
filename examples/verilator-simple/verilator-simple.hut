@@ -1,0 +1,21 @@
+#!/usr/bin/env -S guile
+# -*- scheme -*- !#
+
+(add-to-load-path "../../source")
+
+(import (prefix (huntest) hut::)
+        (prefix (huntest verilator) verilator::))
+
+(hut::run
+ (hut::make-testbench
+  #:name "Simple Verilator testbench"
+  #:tests
+  (hut::make-test
+   #:name "simulation"
+   #:body
+   (verilator::test-body-simple
+    #:runtime-flags '()
+    #:sources '("testbench.sv")
+    #:top "testbench"
+    #:timing? #t
+    #:build-jobs 1))))
