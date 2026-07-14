@@ -14,7 +14,16 @@
  (srfi srfi-26)                         ; Currying with cut
  (srfi srfi-28)                         ; Simple format
  (srfi srfi-37)                         ; args-fold
- (srfi srfi-39))                        ; Parameters
+ (srfi srfi-39)                         ; Parameters
+ (ice-9 string-fun))
+
+;;;
+;;; Quote one argument for the shell used by hut::system%.
+;;;
+(define (shell-quote arg)
+  (string-append "'"
+                 (string-replace-substring arg "'" "'\"'\"'")
+                 "'"))
 
 ;;;
 ;;; Simple iverilog testbench test body function
@@ -50,7 +59,8 @@
           (parameters
            ;; (map (cut string-append (format "-P~a." top) <>) parameters)
            (map (lambda (p)
-                  (format "-P~a.~a=~a" top (first p) (second p)))
+                  (shell-quote
+                   (format "-P~a.~a=~a" top (first p) (second p))))
                 parameters)))
 
       (let-values (((ext-flags reg-flags)
