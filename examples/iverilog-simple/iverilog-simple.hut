@@ -7,9 +7,14 @@
         (prefix (huntest iverilog) iverilog::))
 
 (hut::run
- (iverilog::simple-testbench
-  ;; #:name "Simple iverilog testbench"
-  #:compile-flags '("-g2012")
-  #:runtime-flags '("-fst")
-  #:sources '("testbench.sv")
-  #:top "testbench"))
+ (hut::make-testbench
+  #:name "Simple iverilog testbench"
+  #:tests
+  (hut::make-test
+   #:name "simulation"
+   #:body
+   (iverilog::test-body-simple
+    #:compile-flags '("-g2012")
+    #:runtime-flags '("-fst")
+    #:sources '("testbench.sv")
+    #:top "testbench"))))

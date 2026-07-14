@@ -24,6 +24,7 @@
      #:body
      (lambda (plusargs base-path testbench-path test-path)
        ;; Test code
+       (hut::println 'success "Test completed")
        #t))
 
    ;; Finalization (optional)

@@ -34,7 +34,7 @@ module testbench;
         repeat(2) @(posedge clock);
 
         // `log_fail(("Blyat"));
-
+        `log_success(("Testbench completed"));
         $finish;
     end
 

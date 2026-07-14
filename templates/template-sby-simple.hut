@@ -21,4 +21,7 @@
     #:engine 'yices
     #:frontend 'yosys-verilog
     #:init (lambda (plusargs base-path tb-path test-path) #t)
-    #:finish (lambda (plusargs base-path tb-path test-path) #t)))))
+    #:finish
+    (lambda (plusargs base-path tb-path test-path)
+      (hut::println 'success "SymbiYosys completed")
+      #t)))))

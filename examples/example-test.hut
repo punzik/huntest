@@ -37,15 +37,17 @@
            (hut::system% (format "echo \"Hello testbench, test ~a!\" > ~a/hello.txt" m (test-path)))
            (hut::system% (format "cat ~a/hello.txt" (test-path)))
            (hut::println 'warn "Plusargs: ~a" plusargs)
-           (when (or (and (= n 1) (= m 17))
-                     (and (= n 3) (= m 31))
-                     (and (= n 10) (= m 53))
-                     (and (= n 33) (= m 17))
-                     (and (= n 57) (= m 24)))
+           (cond
+            ((or (and (= n 1) (= m 17))
+                 (and (= n 3) (= m 31))
+                 (and (= n 10) (= m 53))
+                 (and (= n 33) (= m 17))
+                 (and (= n 57) (= m 24)))
              (hut::println 'fail "ЪУЪ!"))
-
-           (when (and (= n 44) (= m 13))
+            ((and (= n 44) (= m 13))
              (raise-exception "Exception in test"))
+            (else
+             (hut::println 'success "Test completed")))
            #t)))
       (iota 100))
 

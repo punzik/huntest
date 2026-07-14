@@ -24,6 +24,31 @@ To enter a development shell with Huntest and Guile:
 nix develop github:punzik/huntest
 ```
 
+Test result protocol
+--------------------
+
+A normal test is `PASS` only when its callback succeeds, it emits no `FAIL#`
+line, and its testbench prints a line beginning with `SUCCESS#`. A callback
+that otherwise succeeds without that marker is reported as `UNKNOWN`, retains
+its work directory, and makes Huntest exit with a non-zero status.
+
+In a `.hut` callback, emit the marker with:
+
+```scheme
+(hut::println 'success "Testbench completed")
+```
+
+For Verilog, generate `huntest.vh` with `huntest --defines` and emit the
+marker before `$finish`:
+
+```systemverilog
+`log_success(("Testbench completed"));
+$finish;
+```
+
+`#:expect-fail #t` tests remain successful when they emit the expected
+`FAIL#` marker; they do not require `SUCCESS#`.
+
 ```
 Usage: huntest [OPTION]... [PLUSARGS]
 Run testbenches

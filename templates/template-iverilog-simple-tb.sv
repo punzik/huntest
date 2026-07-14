@@ -12,6 +12,8 @@ module testbench;
 `else
         `log_info(("TESTBENCH undefined"));
 `endif
+        `log_success(("Testbench completed"));
+        $finish;
     end
 
     initial begin

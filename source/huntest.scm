@@ -57,25 +57,29 @@
 
 ;;; '(tag-symbol . tag-name)
 (define output-tags
-  '((info . "INFO#")
-    (warn . "WARN#")
-    (fail . "FAIL#")))
+  '((info    . "INFO#")
+    (warn    . "WARN#")
+    (success . "SUCCESS#")
+    (fail    . "FAIL#")))
 
 ;;; '(tag-symbol color-code prefix)
 (define output-tag-format
-  '((info 15  "   | ")
-    (warn 226 "   + ")
-    (fail 196 "   ! ")
-    (#f   244 "   : ")))
+  '((info    15  "   | ")
+    (warn    226 "   + ")
+    (success 47  "   * ")
+    (fail    196 "   ! ")
+    (#f     244 "   : ")))
 
-;;; Fail tags list
+;;; Fail and success tags lists
 (define fail-tags '(fail))
+(define success-tags '(success))
 
-(define LOG_HEAD_COLOR  14)
-(define LOG_DEFER_COLOR 244)
-(define LOG_INFO_COLOR  6)
-(define LOG_SUCC_COLOR  47)
-(define LOG_FAIL_COLOR  196)
+(define LOG_HEAD_COLOR    14)
+(define LOG_DEFER_COLOR   244)
+(define LOG_INFO_COLOR    6)
+(define LOG_SUCC_COLOR    47)
+(define LOG_UNKNOWN_COLOR 226)
+(define LOG_FAIL_COLOR    196)
 
 ;;;
 ;;; Colorize text
@@ -148,6 +152,16 @@
          (map (lambda (t) (cdr (assq t output-tags))) fail-tags)))
     (any (lambda (s)
            (find (cut string-prefix? <> s) fail-tag-prefixes))
+         (if (list? strs) strs (list strs)))))
+
+;;;
+;;; String or list of strings has success tag
+;;;
+(define (tag-success? strs)
+  (let ((success-tag-prefixes
+         (map (lambda (t) (cdr (assq t output-tags))) success-tags)))
+    (any (lambda (s)
+           (find (cut string-prefix? <> s) success-tag-prefixes))
          (if (list? strs) strs (list strs)))))
 
 ;;;
@@ -494,12 +508,13 @@
 ;;; Test struct
 ;;;
 (define-record-type <test>
-  (test-new name expect-fail func pass output path)
+  (test-new name expect-fail func pass unknown output path)
   test?
   (name test-name test-set-name!)
   (expect-fail test-expect-fail)
   (func test-func)
   (pass test-pass? test-pass!)
+  (unknown test-unknown? test-unknown!)
   (output test-output test-set-output!)
   (path test-path test-set-path!))
 
@@ -533,7 +548,7 @@
 (define* (make-test #:key (name "") (expect-fail #f) (body (lambda args #f)))
   (let* ((name (string-trim-both name))
          (name (if (string-null? name) UNNAMED_TEST_NAME name)))
-    (test-new name expect-fail body #f '() #f)))
+    (test-new name expect-fail body #f #f '() #f)))
 
 ;;;
 ;;; Testbench constructor
@@ -628,8 +643,9 @@
 ;;;
 ;;; Execute function with intercept of output
 ;;;
-(define (execute-phase func set-output! set-pass! expect-fail)
-  (let* ((pass #f)
+(define* (execute-phase func set-output! set-pass! expect-fail
+                        #:key (require-success? #f) (set-unknown! #f))
+  (let* ((callback-pass #f)
          (output (string-split
                   (string-trim-both
                    (with-output-to-string
@@ -638,15 +654,28 @@
                            (lambda (e)
                              (newline)
                              (println 'fail "~a" e))
-                         (lambda () (set! pass (func)))
+                         (lambda () (set! callback-pass (func)))
                          #:unwind? #t))))
                   #\newline))
-         (pass (and pass
-                    ((if expect-fail values not)
-                     (tag-fail? output)))))
+         (fail? (tag-fail? output))
+         (success? (tag-success? output))
+         (pass (and callback-pass
+                    ((if expect-fail values not) fail?)))
+         ;; A normal test that reaches its end without FAIL# must still
+         ;; explicitly confirm that its testbench completed successfully.
+         (unknown? (and require-success?
+                        (not expect-fail)
+                        pass
+                        (not success?)))
+         (output (if unknown?
+                     (append output
+                             (list "WARN#Test completed without SUCCESS# marker; result is undefined."))
+                     output))
+         (pass (and pass (not unknown?))))
 
     (set-output! output)
     (set-pass! pass)
+    (when set-unknown! (set-unknown! unknown?))
     pass))
 
 ;;;
@@ -678,7 +707,9 @@
                (path-wrapper (test-path test))))
    (lambda (o) (test-set-output! test o))
    (lambda (p) (test-pass! test p))
-   (test-expect-fail test)))
+   (test-expect-fail test)
+   #:require-success? #t
+   #:set-unknown! (lambda (unknown?) (test-unknown! test unknown?))))
 
 ;;;
 ;;; Execute testbench init
@@ -707,6 +738,41 @@
    #f))
 
 ;;;
+;;; Test and testbench result status
+;;;
+(define (test-status test)
+  (cond
+   ((test-pass? test) 'pass)
+   ((test-unknown? test) 'unknown)
+   (else 'fail)))
+
+(define (tb-pass? tb)
+  (and (tb-init-pass? tb)
+       (tb-fini-pass? tb)
+       (every test-pass? (tb-tests tb))))
+
+(define (tb-fail? tb)
+  (or (not (tb-init-pass? tb))
+      (not (tb-fini-pass? tb))
+      (any (lambda (test) (eq? (test-status test) 'fail))
+           (tb-tests tb))))
+
+(define (tb-status tb)
+  (cond
+   ((tb-pass? tb) 'pass)
+   ((tb-fail? tb) 'fail)
+   (else 'unknown)))
+
+(define (status-string status)
+  (string-upcase (symbol->string status)))
+
+(define (status-color status)
+  (case status
+    ((pass) LOG_SUCC_COLOR)
+    ((unknown) LOG_UNKNOWN_COLOR)
+    (else LOG_FAIL_COLOR)))
+
+;;;
 ;;; Format testbench output log
 ;;;
 (define (tb-print-output tb verbosity colorize?)
@@ -722,17 +788,14 @@
   (let ((string-colorize (if colorize? string-colorize (lambda (s c) s)))
         (verbose (eq? verbosity 'verbose))
         (quiet (eq? verbosity 'quiet))
-        (testbench-pass (and (tb-init-pass? tb)
-                             (tb-fini-pass? tb)
-                             (every test-pass? (tb-tests tb)))))
+        (testbench-status (tb-status tb)))
 
-    (when (not (and quiet testbench-pass))
-      (let-values (((s c) (if testbench-pass
-                              (values "PASS" LOG_HEAD_COLOR)
-                              (values "FAIL" LOG_FAIL_COLOR))))
-        (display (string-colorize (format "TESTBENCH ~a ~a : ~a\n"
-                                          s (tb-name tb) (tb-work-path tb))
-                                  c)))
+    (when (not (and quiet (eq? testbench-status 'pass)))
+      (display
+       (string-colorize
+        (format "TESTBENCH ~a ~a : ~a\n"
+                (status-string testbench-status) (tb-name tb) (tb-work-path tb))
+        (status-color testbench-status)))
 
       ;; Print init output
       (print-output (tb-init-output tb)
@@ -744,7 +807,8 @@
         (for-each
          (lambda (test)
            (when (not (and quiet (test-pass? test)))
-             (let ((testname (format "~a::~a" (tb-name tb) (test-name test))))
+             (let ((testname (format "~a::~a" (tb-name tb) (test-name test)))
+                   (status (test-status test)))
                ;; Test header
                (display (string-colorize (format "   TEST ~a : ~a\n"
                                                  testname
@@ -758,9 +822,9 @@
 
                ;; Test status
                (display
-                (if (test-pass? test)
-                    (string-colorize (format "   PASS ~a\n" testname) LOG_SUCC_COLOR)
-                    (string-colorize (format "   FAIL ~a\n" testname) LOG_FAIL_COLOR))))))
+                (string-colorize (format "   ~a ~a\n"
+                                         (status-string status) testname)
+                                 (status-color status))))))
          (tb-tests tb)))
 
       ;; Print fini output
@@ -770,9 +834,9 @@
 
       ;; Print testbench status
       (display
-       (if testbench-pass
-           (string-colorize (format "PASS ~a\n" (tb-name tb)) LOG_SUCC_COLOR)
-           (string-colorize (format "FAIL ~a\n" (tb-name tb)) LOG_FAIL_COLOR)))
+       (string-colorize (format "~a ~a\n"
+                                (status-string testbench-status) (tb-name tb))
+                        (status-color testbench-status)))
       (newline))))
 
 ;;;
@@ -817,19 +881,16 @@
 ;;; Clear testbench output dir
 ;;;
 (define (clear-testbench-output tb)
-  (let ((tb-pass (and (tb-init-pass? tb)
-                      (tb-fini-pass? tb)
-                      (every test-pass? (tb-tests tb)))))
-    (if tb-pass
+  (if (tb-pass? tb)
         (delete-recursive (tb-work-path tb))
         (for-each
          (lambda (test)
            (when (test-pass? test)
              (delete-recursive (test-path test))))
-         (tb-tests tb)))))
+         (tb-tests tb))))
 
 ;;;
-;;; Print pass/fail statistics
+;;; Print test result statistics
 ;;;
 (define (print-summary testbenches colorize?)
   (let* ((colorize (if colorize? string-colorize (lambda (s c) s)))
@@ -837,41 +898,47 @@
          (test-count (apply
                       +
                       (map (lambda (tb) (length (tb-tests tb))) testbenches)))
-         (tb-succ (length
-                   (filter
-                    (lambda (tb)
-                      (and (tb-init-pass? tb)
-                           (tb-fini-pass? tb)
-                           (every test-pass? (tb-tests tb))))
-                    testbenches)))
+         (tb-succ (length (filter tb-pass? testbenches)))
          (test-succ (apply
                      +
                      (map (lambda (tb) (length (filter test-pass? (tb-tests tb))))
                           testbenches)))
-         (tb-fail (- tb-count tb-succ))
-         (test-fail (- test-count test-succ)))
+         (tb-unknown (length
+                      (filter (lambda (tb) (eq? (tb-status tb) 'unknown))
+                              testbenches)))
+         (test-unknown (apply
+                        +
+                        (map (lambda (tb)
+                               (length (filter test-unknown? (tb-tests tb))))
+                             testbenches)))
+         (tb-fail (- tb-count tb-succ tb-unknown))
+         (test-fail (- test-count test-succ test-unknown)))
 
-    (display (colorize (format "## ALL  ~a (~a)\n" tb-count test-count) LOG_HEAD_COLOR))
-    (display (colorize (format "## PASS ~a (~a)\n" tb-succ test-succ) LOG_SUCC_COLOR))
-    (display (colorize (format "## FAIL ~a (~a)\n" tb-fail test-fail) LOG_FAIL_COLOR))
+    (display (colorize (format "## ALL     ~a (~a)\n" tb-count test-count) LOG_HEAD_COLOR))
+    (display (colorize (format "## PASS    ~a (~a)\n" tb-succ test-succ) LOG_SUCC_COLOR))
+    (display (colorize (format "## UNKNOWN ~a (~a)\n" tb-unknown test-unknown) LOG_UNKNOWN_COLOR))
+    (display (colorize (format "## FAIL    ~a (~a)\n" tb-fail test-fail) LOG_FAIL_COLOR))
 
-    (when (not (zero? tb-fail))
+    (when (not (= tb-count tb-succ))
       (newline)
-      (display (colorize "## List of failed testbenches\n" LOG_FAIL_COLOR))
+      (display "## List of failed or undefined testbenches\n")
       (for-each
        (lambda (tb)
-         (display (colorize (format "  ~a: ~a\n"
-                                    (tb-base-path tb)
-                                    (tb-filename tb))
-                            LOG_FAIL_COLOR))
-         (for-each
-          (lambda (test) (display (colorize (format "    ~a\n" (test-name test)) LOG_FAIL_COLOR)))
-          (filter (compose not test-pass?) (tb-tests tb))))
-       (filter (lambda (tb)
-                 (not (and (tb-init-pass? tb)
-                           (tb-fini-pass? tb)
-                           (every test-pass? (tb-tests tb)))))
-               testbenches)))))
+         (let ((tb-status (tb-status tb)))
+           (display (colorize (format "  ~a: ~a [~a]\n"
+                                      (tb-base-path tb)
+                                      (tb-filename tb)
+                                      (status-string tb-status))
+                              (status-color tb-status)))
+           (for-each
+            (lambda (test)
+              (let ((status (test-status test)))
+                (display (colorize (format "    ~a [~a]\n"
+                                           (test-name test)
+                                           (status-string status))
+                                   (status-color status)))))
+            (filter (compose not test-pass?) (tb-tests tb)))))
+       (filter (compose not tb-pass?) testbenches)))))
 
 ;;;
 ;;; Make dir reqursive
@@ -1093,12 +1160,7 @@
 ;;; Check pass of testbenches
 ;;;
 (define (testbenches-pass? tb-list)
-  (every
-   (lambda (tb)
-     (and (tb-init-pass? tb)
-          (tb-fini-pass? tb)
-          (every test-pass? (tb-tests tb))))
-   tb-list))
+  (every tb-pass? tb-list))
 
 ;;;
 ;;; Parse command line options with SRFI-37
