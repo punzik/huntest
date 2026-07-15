@@ -15,6 +15,8 @@ The project includes adapters for:
 > **Status:** work in progress.  Huntest runs on Unix-like systems and the
 > flake exposes `x86_64-linux` and `aarch64-linux` outputs.
 
+Framework users should start with the [public API reference](docs/api.md).
+
 ## Quick start with Nix
 
 Run Huntest directly from GitHub:
@@ -207,7 +209,8 @@ Macro calls use doubled parentheses.  A direct
 ## Writing `.hut` files
 
 A `.hut` file is Guile Scheme.  It evaluates to testbench records through
-`hut::run`.
+`hut::run`.  See the complete [public API reference](docs/api.md) for every
+exported binding and backend keyword.
 
 ```scheme
 (import (prefix (huntest) hut::))
